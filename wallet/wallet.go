@@ -45,12 +45,17 @@ type Wallet interface {
 	// Unlock unlocks an account with the given passphrase for a limited amount of time.
 	// If no timeout is set (nil), the wallet will be unlocked indefinetly.
 	// If a timeout is set, it overwrites a previously set timeout, even if it was unlocked indefinetly.
-	Unlock(password string, a Account, timeout time.Duration) error
+	Unlock(a Account, password string, timeout time.Duration) error
 
 	// Lock locks an account.
 	Lock(a Account) error
 
 	// SignData requests a signature from a specified account.
 	// It returns the signature or an error.
-	SignData(data []byte, a Account) ([]byte, error)
+	SignData(a Account, data []byte) ([]byte, error)
+
+	// SignDataWithPW requests a signature from a specified account.
+	// It returns the signature or an error.
+	// If the account is locked, it will unlock the account, sign the data and lock the account again.
+	SignDataWithPW(a Account, password string, data []byte) ([]byte, error)
 }
