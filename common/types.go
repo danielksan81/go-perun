@@ -5,24 +5,25 @@
 // Package common provides type abstractions that are used throughout go-perun.
 package common
 
-import "encoding"
+import (
+	"encoding/hex"
+)
 
 // Address represents a identifier used in a cryptocurrency.
 // It is dependent on the currency and needs to be implemented for every blockchain.
-type Address interface {
-	encoding.BinaryMarshaler
-	encoding.BinaryUnmarshaler
+type Address []byte
+
+// Hex returns a hexidecimal representation of an address
+func (a Address) Hex() string {
+	return hex.EncodeToString(a)
 }
 
-// PubKey represents an unabridged public key
-// It is dependent on the currency and needs to be implemented for every blockchain.
-type PubKey interface {
-	encoding.BinaryMarshaler
-	encoding.BinaryUnmarshaler
-
-	// ToAddress converts this public key to an address in the respective cryptocurrency.
-	ToAddress() Address
-
-	// VerifySign verifies whether a signature was signed by the corresponding sk to this pk.
-	VerifySign(sign []byte) error
+// HexToAddress converts a Hex string to an address
+// It does not do any type checking
+func HexToAddress(src string) Address {
+	decoded, err := hex.DecodeString(src)
+	if err != nil {
+		return nil
+	}
+	return Address(decoded)
 }

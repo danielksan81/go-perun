@@ -16,7 +16,6 @@ import (
 // Account represents a single account
 type Account struct {
 	Address common.Address `json:"address"` // Address used by this account
-	PubKey  common.PubKey  `json:"pubkey"`  // Optional unabridged version of the pubkey
 	Path    string         `json:"path"`    // Optional resource locator within a backend
 }
 
@@ -30,8 +29,8 @@ type Wallet interface {
 	// It does not decrypt the keys.
 	Connect(password string) error
 
-	// Close closes a connection to a wallet and locks all accounts.
-	Close() error
+	// Disconnect closes a connection to a wallet and locks all accounts.
+	Disconnect() error
 
 	// Status returns the current status of the wallet.
 	Status() (string, error)
