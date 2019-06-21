@@ -1,3 +1,3 @@
 module github.com/perun-network/go-perun
 
-go 1.12
+go 1.11
