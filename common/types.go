@@ -6,24 +6,16 @@
 package common
 
 import (
-	"encoding/hex"
+	"encoding"
+	"fmt"
 )
 
 // Address represents a identifier used in a cryptocurrency.
 // It is dependent on the currency and needs to be implemented for every blockchain.
-type Address []byte
-
-// Hex returns a hexidecimal representation of an address
-func (a Address) Hex() string {
-	return hex.EncodeToString(a)
-}
-
-// HexToAddress converts a Hex string to an address
-// It does not do any type checking
-func HexToAddress(src string) Address {
-	decoded, err := hex.DecodeString(src)
-	if err != nil {
-		return nil
-	}
-	return Address(decoded)
+type Address interface {
+	encoding.BinaryMarshaler
+	encoding.BinaryUnmarshaler
+	fmt.Stringer
+	FromString(string) Address
+	Equals(Address) bool
 }
