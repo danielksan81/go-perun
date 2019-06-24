@@ -7,7 +7,7 @@ PKG_LIST := $(shell go list ${PKG}/... | grep -v /vendor/)
 all: build
 
 dep: ## Get the dependencies
-	@go get -v -d ./...
+	@export GO111MODULE=on
 
 build: dep ## Build the binary file
 	@go build -i -v $(PKG)
@@ -15,7 +15,7 @@ build: dep ## Build the binary file
 clean: ## Remove previous build
 	@rm -f $(PROJECT_NAME)
 
-test: ## Run unittests
+test: dep ## Run unittests
 	@go test -short ${PKG_LIST}
 
 lint: ## Lint the files
