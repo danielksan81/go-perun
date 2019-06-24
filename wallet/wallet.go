@@ -14,9 +14,30 @@ import (
 )
 
 // Account represents a single account
-type Account struct {
-	Address common.Address `json:"address"` // Address used by this account
-	Path    string         `json:"path"`    // Optional resource locator within a backend
+type Account interface {
+
+	// Address used by this account
+	Address() common.Address
+
+	// Path returns an optional resource locator within a backend
+	Path() string
+
+	// Unlocks this account with the given passphrase for a limited amount of time.
+	// If no timeout is set (nil), the wallet will be unlocked indefinetly.
+	// If a timeout is set, it overwrites a previously set timeout, even if it was unlocked indefinetly.
+	Unlock(password string, timeout time.Duration) error
+
+	// Locks this account.
+	Lock() error
+
+	// SignData requests a signature from this account.
+	// It returns the signature or an error.
+	SignData(data []byte) ([]byte, error)
+
+	// SignDataWithPW requests a signature from this account.
+	// It returns the signature or an error.
+	// If the account is locked, it will unlock the account, sign the data and lock the account again.
+	SignDataWithPW(password string, data []byte) ([]byte, error)
 }
 
 // Wallet represents single or multiple accounts on a hardware or software wallet.
@@ -41,20 +62,6 @@ type Wallet interface {
 	// Contains checks whether this wallet contains this account.
 	Contains(a Account) bool
 
-	// Unlock unlocks an account with the given passphrase for a limited amount of time.
-	// If no timeout is set (nil), the wallet will be unlocked indefinetly.
-	// If a timeout is set, it overwrites a previously set timeout, even if it was unlocked indefinetly.
-	Unlock(a Account, password string, timeout time.Duration) error
-
-	// Lock locks an account.
-	Lock(a Account) error
-
-	// SignData requests a signature from a specified account.
-	// It returns the signature or an error.
-	SignData(a Account, data []byte) ([]byte, error)
-
-	// SignDataWithPW requests a signature from a specified account.
-	// It returns the signature or an error.
-	// If the account is locked, it will unlock the account, sign the data and lock the account again.
-	SignDataWithPW(a Account, password string, data []byte) ([]byte, error)
+	// Lock locks all
+	Lock() error
 }
