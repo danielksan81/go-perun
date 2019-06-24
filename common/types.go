@@ -16,6 +16,6 @@ type Address interface {
 	encoding.BinaryMarshaler
 	encoding.BinaryUnmarshaler
 	fmt.Stringer
-	FromString(string) Address
+	FromString(string) (Address, error)
 	Equals(Address) bool
 }
