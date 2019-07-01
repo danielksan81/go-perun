@@ -23,7 +23,7 @@ type Wallet interface {
 
 	// Connect establishes a connection to a wallet.
 	// It does not decrypt the keys.
-	Connect(password string) error
+	Connect(path, password string) error
 
 	// Disconnect closes a connection to a wallet and locks all accounts.
 	Disconnect() error
