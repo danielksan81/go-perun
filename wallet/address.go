@@ -2,20 +2,17 @@
 // This file is part of go-perun. Use of this source code is governed by a
 // MIT-style license that can be found in the LICENSE file.
 
-// Package common provides type abstractions that are used throughout go-perun.
-package common
+package wallet
 
-import (
-	"encoding"
-	"fmt"
-)
+import "fmt"
 
 // Address represents a identifier used in a cryptocurrency.
 // It is dependent on the currency and needs to be implemented for every blockchain.
 type Address interface {
-	encoding.BinaryMarshaler
-	encoding.BinaryUnmarshaler
+	// Bytes converts this address to bytes
+	Bytes() []byte
+	// String converts this address to a string
 	fmt.Stringer
-	FromString(string) (Address, error)
+	// Equals checks the equality of two addresses
 	Equals(Address) bool
 }
