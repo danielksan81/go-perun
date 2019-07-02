@@ -17,7 +17,7 @@ type Account interface {
 	Unlock(password string) error
 
 	// Returns a bool indicating whether this account is currently unlocked.
-	isUnlocked() bool
+	IsUnlocked() bool
 
 	// Locks this account.
 	Lock() error
