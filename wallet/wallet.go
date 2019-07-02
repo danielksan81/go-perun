@@ -19,24 +19,30 @@ type Helper interface {
 type Wallet interface {
 
 	// Path returns an identifier under which this wallet is located.
+	// Should return nil, if the wallet was not properly initialized.
 	Path() string
 
 	// Connect establishes a connection to a wallet.
-	// It does not decrypt the keys.
+	// It should not decrypt the keys.
+	// Returns an error if a connection cannot be established.
 	Connect(path, password string) error
 
 	// Disconnect closes a connection to a wallet and locks all accounts.
+	// It returns an error if no connection is currently established to the wallet.
 	Disconnect() error
 
 	// Status returns the current status of the wallet.
+	// Returns an error, if the wallet is in a non-usable state (e.g. if no connection is established).
 	Status() (string, error)
 
 	// Accounts returns all accounts associated with this wallet.
+	// Should return an empty byteslice if no accounts are found.
 	Accounts() []Account
 
 	// Contains checks whether this wallet contains this account.
 	Contains(a Account) bool
 
-	// Lock locks all
+	// Lock locks all accounts, does not disconnect this wallet.
+	// Should return an error, if the wallet is in a non-usable state.
 	Lock() error
 }
