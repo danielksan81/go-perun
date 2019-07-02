@@ -4,24 +4,20 @@
 
 package wallet
 
-import "time"
-
-// Account represents a single account
+// Account represents a single account.
 type Account interface {
-
-	// Address used by this account
+	// Address used by this account.
 	Address() Address
 
-	// Wallet returns the wallet this account belongs to.
-	Wallet() Wallet
-
-	// Path returns an optional resource locator within a backend
+	// Path returns an optional resource locator within a backend.
 	Path() string
 
-	// Unlocks this account with the given passphrase for a limited amount of time.
-	// If no timeout is set (nil), the wallet will be unlocked indefinetly.
-	// If a timeout is set, it overwrites a previously set timeout, even if it was unlocked indefinetly.
-	Unlock(password string, timeout time.Duration) error
+	// Unlocks this account with the given passphrase.
+	// Returns an error if unlocking failed.
+	Unlock(password string) error
+
+	// Returns a bool indicating whether this account is currently unlocked.
+	isUnlocked() bool
 
 	// Locks this account.
 	Lock() error

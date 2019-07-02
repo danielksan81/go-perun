@@ -7,19 +7,19 @@
 // Wallet providers can be hardware, software remote or local wallets.
 package wallet
 
-// Helper is an empty interface that implements helper methods
+// Helper provides useful methods for this blockchain
 type Helper interface {
-	// NewAddressFromString creates a new address from a string
+	// NewAddressFromString creates a new address from the natural string representation of this blockchain
 	NewAddressFromString(s string) (Address, error)
+
 	// NewAddressFromBytes creates a new address from a byte array
-	NewAddressFromBytes(data []byte) error
+	NewAddressFromBytes(data []byte) (Address, error)
 }
 
-// Wallet represents single or multiple accounts on a hardware or software wallet.
+// Wallet represents a single or multiple accounts on a hardware or software wallet.
 type Wallet interface {
-
 	// Path returns an identifier under which this wallet is located.
-	// Should return nil, if the wallet was not properly initialized.
+	// Should return an empty string if the wallet was not properly initialized.
 	Path() string
 
 	// Connect establishes a connection to a wallet.
@@ -32,7 +32,7 @@ type Wallet interface {
 	Disconnect() error
 
 	// Status returns the current status of the wallet.
-	// Returns an error, if the wallet is in a non-usable state (e.g. if no connection is established).
+	// Returns an error if the wallet is in a non-usable state (e.g. if no connection is established).
 	Status() (string, error)
 
 	// Accounts returns all accounts associated with this wallet.
@@ -43,6 +43,6 @@ type Wallet interface {
 	Contains(a Account) bool
 
 	// Lock locks all accounts, does not disconnect this wallet.
-	// Should return an error, if the wallet is in a non-usable state.
+	// Should return an error if the wallet is in a non-usable state.
 	Lock() error
 }
