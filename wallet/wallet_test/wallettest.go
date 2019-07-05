@@ -15,13 +15,13 @@ import (
 type Setup struct {
 	T *testing.T
 	//Wallet tests
-	Wallet    wallet.Wallet // should be uninitialized
+	Wallet    wallet.Wallet // wallet implementation, should be uninitialized
 	Path      string        // path to a valid wallet, should contain exactly one account
-	WalletPW  string
-	AccountPW string
+	WalletPW  string        // password to a valid wallet
+	AccountPW string        // password to the account of the wallet
 	//Address tests
-	AddrString string //should not be in wallet
-	Helper     wallet.Helper
+	AddrString string        // valid address, should not be in wallet
+	Helper     wallet.Helper // helper implementation
 	// Signature tests
 	DataToSign []byte
 	SignedData []byte
@@ -125,16 +125,16 @@ func testSignature(t *Setup) {
 
 func testAddress(t *Setup) {
 	init, err := t.Helper.NewAddressFromString(t.AddrString)
-	assert.Nil(t.T, err, "Byte deserialization of Address should work")
+	assert.Nil(t.T, err, "String parsing of Address should work")
 	unInit, err := t.Helper.NewAddressFromBytes(make([]byte, len(init.Bytes()), len(init.Bytes())))
 	assert.Nil(t.T, err, "Byte deserialization of Address should work")
-	acc, err := t.Helper.NewAddressFromBytes(init.Bytes())
+	addr, err := t.Helper.NewAddressFromBytes(init.Bytes())
 	assert.Nil(t.T, err, "Byte deserialization of Address should work")
-	assert.Equal(t.T, init, acc, "Expected equality to serialized byte array")
-	acc, err = t.Helper.NewAddressFromString(init.String())
-	assert.Nil(t.T, err, "String deserialization of Address should work")
+	assert.Equal(t.T, init, addr, "Expected equality to serialized byte array")
+	addr, err = t.Helper.NewAddressFromString(init.String())
+	assert.Nil(t.T, err, "String parsing of Address should work")
 
-	assert.Equal(t.T, init, acc, "Expected equality to serialized string array")
+	assert.Equal(t.T, init, addr, "Expected equality to serialized string array")
 	assert.True(t.T, init.Equals(init), "Expected equality to itself")
 	assert.False(t.T, init.Equals(unInit), "Expected non-equality to other")
 	assert.True(t.T, unInit.Equals(unInit), "Expected equality to itself")
