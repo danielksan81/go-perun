@@ -9,9 +9,6 @@ type Account interface {
 	// Address used by this account.
 	Address() Address
 
-	// Path returns an optional resource locator within a backend.
-	Path() string
-
 	// Unlocks this account with the given passphrase.
 	// Returns an error if unlocking failed.
 	Unlock(password string) error

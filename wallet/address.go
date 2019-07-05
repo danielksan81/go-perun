@@ -6,12 +6,13 @@ package wallet
 
 import "fmt"
 
-// Address represents an address in a blockchain network.
+// Address represents a identifier used in a cryptocurrency.
+// It is dependent on the currency and needs to be implemented for every blockchain.
 type Address interface {
-	// String converts this address to a string.
-	fmt.Stringer
-	// Bytes returns the bytes representation of this address.
+	// Bytes converts this address to bytes
 	Bytes() []byte
-	// Equals checks the equality of two addresses.
+	// String converts this address to a string
+	fmt.Stringer
+	// Equals checks the equality of two addresses
 	Equals(Address) bool
 }

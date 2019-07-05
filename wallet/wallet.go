@@ -9,11 +9,16 @@ package wallet
 
 // Helper provides useful methods for this blockchain
 type Helper interface {
-	// NewAddressFromString creates a new address from the natural string representation of this blockchain
+	// NewAddressFromString creates a new address from the natural string representation of this blockchain.
 	NewAddressFromString(s string) (Address, error)
 
-	// NewAddressFromBytes creates a new address from a byte array
+	// NewAddressFromBytes creates a new address from a byte array.
 	NewAddressFromBytes(data []byte) (Address, error)
+
+	// VerifySignature verifies if this signature was signed by this address.
+	// It should return an error iff the signature or message are malformed.
+	// If the signature does not match the address it should return false, nil
+	VerifySignature(msg, sign []byte, a Address) (bool, error)
 }
 
 // Wallet represents a single or multiple accounts on a hardware or software wallet.
