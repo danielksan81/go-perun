@@ -1,12 +1,6 @@
 stages:
   - vetting
   - tests
-  
-before_script:
-    - export GOROOT=/usr/lib/go-1.11
-    - export GOPATH=~/go
-    - export PATH=$PATH:$GOROOT/bin
-    - export PATH=$PATH:$GOPATH/bin
 
 lint:
   image: golang
@@ -14,12 +8,6 @@ lint:
   script:
     - golint -set_exit_status ./...
   allow_failure: true
-  
-fmt:
-  image: golang
-  stage: vetting
-  script:
-    - gofmt ./...
 
 vet:
   image: golang
