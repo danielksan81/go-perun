@@ -20,22 +20,20 @@ vet:
   script:
     - go vet ./...
 
-unit_tests:
-  image: golang
-  stage: tests
-  script:
-    - go test -short ./...
-
 unit_race_tests:
   image: golang
   stage: tests
   script:
     - go test -race ./...
+  only:
+    - merge_requests
 
-codecoverage:
+unit_tests:
   image: golang
   stage: tests
   script:
     - go test -cover ./...
+  only:
+    - merge_requests
 
 
