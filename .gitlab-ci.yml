@@ -3,7 +3,7 @@ stages:
   - tests
 
 before_script:
-  - go get github.com/golang/lint/golint
+  - go get -u golang.org/x/lint/golint
 
 lint:
   image: golang
