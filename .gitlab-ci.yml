@@ -2,6 +2,9 @@ stages:
   - vetting
   - tests
 
+before_script:
+  - go get -v github.com/golang/lint/golint
+
 lint:
   image: golang
   stage: vetting
