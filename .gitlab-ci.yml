@@ -4,12 +4,14 @@ stages:
 
 before_script:
   - go get -u golang.org/x/lint/golint
+  - export GOPATH=$HOME/go
+  - export PATH=$PATH:$GOROOT/bin:$GOPATH/bin
 
 lint:
   image: golang
   stage: vetting
   script:
-    - golint -set_exit_status ./...
+    - /src/golang.org/x/lint/golint -set_exit_status ./...
   allow_failure: true
 
 vet:
