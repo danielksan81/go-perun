@@ -32,10 +32,10 @@ unit_race_tests:
   script:
     - go test -race ./...
 
-memtests:
+codecoverage:
   image: golang
   stage: tests
   script:
-    - go test -msan -short ./...
+    - go test -cover ./...
 
 
