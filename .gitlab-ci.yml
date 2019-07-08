@@ -11,7 +11,7 @@ lint:
   image: golang
   stage: vetting
   script:
-    - /src/golang.org/x/lint/golint -set_exit_status ./...
+    - golint -set_exit_status ./...
   allow_failure: true
 
 vet:
