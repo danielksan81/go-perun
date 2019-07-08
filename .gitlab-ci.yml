@@ -20,8 +20,22 @@ vet:
   script:
     - go vet ./...
 
+unit_tests:
+  image: golang
+  stage: tests
+  script:
+    - go test -short ./...
+
 unit_race_tests:
   image: golang
   stage: tests
   script:
     - go test -race ./...
+
+memtests:
+  image: golang
+  stage: tests
+  script:
+    - go test -msan -short ./...
+
+
