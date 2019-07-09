@@ -1,4 +1,6 @@
 .only-default: &only-default
+  only:
+    - *
 
 stages:
   - vetting
