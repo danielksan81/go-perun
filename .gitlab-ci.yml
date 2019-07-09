@@ -1,6 +1,6 @@
 .only-default: &only-default
   only:
-    - *
+    - branches
 
 stages:
   - vetting
