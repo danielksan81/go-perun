@@ -12,7 +12,6 @@ before_script:
   - go get -u golang.org/x/lint/golint
   - export GOPATH=$HOME/go
   - export PATH=$PATH:$GOROOT/bin:$GOPATH/bin
-  - go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
   - go get github.com/gojp/goreportcard/cmd/goreportcard-cli
 
 lint:
