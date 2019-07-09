@@ -1,6 +1,10 @@
 .only-default: &only-default
   only:
-    - branches
+    - tags
+    - pushes
+    - merge_requests
+    - dev
+    - master
 
 stages:
   - vetting
