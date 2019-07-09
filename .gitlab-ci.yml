@@ -1,9 +1,4 @@
 .only-default: &only-default
-  only:
-    - master
-    - dev
-    - merge_requests
-    - tags
 
 stages:
   - vetting
