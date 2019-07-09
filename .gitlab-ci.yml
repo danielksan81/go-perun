@@ -12,6 +12,8 @@ before_script:
   - go get -u golang.org/x/lint/golint
   - export GOPATH=$HOME/go
   - export PATH=$PATH:$GOROOT/bin:$GOPATH/bin
+  - curl -L https://git.io/vp6lP | sh
+  - go get github.com/gojp/goreportcard/cmd/goreportcard-cli
 
 lint:
   <<: *only-default
@@ -47,9 +49,6 @@ unit_tests:
 goreportcard:
   image: golang
   stage: tests
-  before_script:
-   - curl -L https://git.io/vp6lP | sh
-   - go get github.com/gojp/goreportcard/cmd/goreportcard-cli
   script:
    - goreportcard-cli -t 90 
 
