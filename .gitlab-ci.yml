@@ -44,3 +44,12 @@ unit_tests:
   only:
     - merge_requests
 
+goreportcard:
+  image: golang
+  stage: tests
+  before_script:
+   - curl -L https://git.io/vp6lP | sh
+   - go get github.com/gojp/goreportcard/cmd/goreportcard-cli
+  script:
+   - goreportcard-cli -t 90 
+
