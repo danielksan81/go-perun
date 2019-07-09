@@ -3,8 +3,6 @@
     - tags
     - pushes
     - merge_requests
-    - dev
-    - master
 
 stages:
   - vetting
