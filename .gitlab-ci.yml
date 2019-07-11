@@ -1,10 +1,6 @@
 cache:
   paths:
-    - /apt-cache
-    - /go/src/github.com
-    - /go/src/golang.org
-    - /go/src/google.golang.org
-    - /go/src/gopkg.in
+    - $HOME/go
 
 .only-default: &only-default
   only:
