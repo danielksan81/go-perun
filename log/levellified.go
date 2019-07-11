@@ -63,7 +63,7 @@ func (l *Levellified) Trace(args ...interface{}) {
 	}
 }
 
-// Traceln implements log level trace and appends a newline.
+// Traceln implements log.TraceLn with white spaces in between arguments.
 func (l *Levellified) Traceln(args ...interface{}) {
 	if l.Lvl >= Trace {
 		l.StdLogger.Println(prepend("[trace]", args)...)
@@ -82,7 +82,7 @@ func (l *Levellified) Debug(args ...interface{}) {
 	}
 }
 
-// Debugln implements log level debug and appends a newline.
+// Debugln implements log.Debugln with white spaces in between arguments.
 func (l *Levellified) Debugln(args ...interface{}) {
 	if l.Lvl >= Debug {
 		l.StdLogger.Println(prepend("[debug]", args)...)
@@ -101,7 +101,7 @@ func (l *Levellified) Info(args ...interface{}) {
 	}
 }
 
-// Infoln implements log level info and appends a newline.
+// Infoln implements log.Infoln with white spaces in between arguments.
 func (l *Levellified) Infoln(args ...interface{}) {
 	if l.Lvl >= Info {
 		l.StdLogger.Println(prepend("[info]", args)...)
@@ -120,7 +120,7 @@ func (l *Levellified) Warn(args ...interface{}) {
 	}
 }
 
-// Warnln implements log level warn and appends a newline.
+// Warnln implements log.Warnln with white spaces in between arguments.
 func (l *Levellified) Warnln(args ...interface{}) {
 	if l.Lvl >= Warn {
 		l.StdLogger.Println(prepend("[warn]", args)...)
@@ -139,7 +139,7 @@ func (l *Levellified) Error(args ...interface{}) {
 	}
 }
 
-// Errorln implements log level error and appends a newline.
+// Errorln implements log.Errorln with white spaces in between arguments.
 func (l *Levellified) Errorln(args ...interface{}) {
 	if l.Lvl >= Error {
 		l.StdLogger.Println(prepend("[error]", args)...)
