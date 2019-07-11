@@ -1,5 +1,6 @@
 cache:
   paths:
+    - /var/cache/apt
     - $HOME/go
 
 .only-default: &only-default
