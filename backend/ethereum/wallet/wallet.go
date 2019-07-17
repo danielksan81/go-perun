@@ -68,6 +68,11 @@ func (w *Wallet) Disconnect() error {
 	if w.ks == nil {
 		return errors.New("keystore not initialized properly")
 	}
+
+	if err := w.Lock(); err != nil {
+		return errors.Wrap(err, "disconnect from keystore failed")
+	}
+
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
