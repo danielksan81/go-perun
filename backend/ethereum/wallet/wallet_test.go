@@ -109,3 +109,33 @@ func connectTmpKeystore(t *testing.T) *Wallet {
 	assert.NotEqual(t, len(w.Accounts()), 0, "Wallet contains no accounts")
 	return w
 }
+
+// Benchmarking part starts here
+
+func BenchmarkGenericAccount(b *testing.B) {
+	setup := newBenchSetup()
+	test.GenericAccountBenchmark(b, setup)
+}
+
+func BenchmarkGenericWallet(b *testing.B) {
+	setup := newBenchSetup()
+	test.GenericWalletBenchmark(b, setup)
+}
+
+func BenchmarkGenericBackend(b *testing.B) {
+	setup := newBenchSetup()
+	test.GenericBackendBenchmark(b, setup)
+}
+
+func newBenchSetup() *test.Setup {
+	// Filled with the same data as the testing
+	return &test.Setup{
+		Wallet:     new(Wallet),
+		Path:       "./" + keyDir,
+		WalletPW:   password,
+		AccountPW:  password,
+		Backend:    new(Backend),
+		AddrString: sampleAddr,
+		DataToSign: []byte(dataToSign),
+	}
+}
