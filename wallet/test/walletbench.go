@@ -149,12 +149,12 @@ func GenericBackendBenchmark(b *testing.B, s *Setup) {
 	}
 	s.signature = signature
 
-	b.Run("SigVerify", func(t *testing.B) { benchBackendSigVerify(t, s) })
+	b.Run("VerifySig", func(t *testing.B) { benchBackendVerifySig(t, s) })
 	b.Run("FromString", func(t *testing.B) { benchBackendNewAddressFromString(t, s) })
 	b.Run("FromBytes", func(t *testing.B) { benchBackendNewAddressFromBytes(t, s) })
 }
 
-func benchBackendSigVerify(b *testing.B, s *Setup) {
+func benchBackendVerifySig(b *testing.B, s *Setup) {
 	perunAcc := s.Wallet.Accounts()[0]
 
 	for n := 0; n < b.N; n++ {
