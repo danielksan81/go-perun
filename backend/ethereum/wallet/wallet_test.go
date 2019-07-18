@@ -26,19 +26,19 @@ const (
 
 func TestGenericWalletTests(t *testing.T) {
 	t.Parallel()
-	setup := newTestSetup()
+	setup := newSetup()
 	test.GenericWalletTest(t, setup)
 }
 
 func TestGenericSignatureTests(t *testing.T) {
 	t.Parallel()
-	setup := newTestSetup()
+	setup := newSetup()
 	test.GenericSignatureTest(t, setup)
 }
 
 func TestGenericAddressTests(t *testing.T) {
 	t.Parallel()
-	setup := newTestSetup()
+	setup := newSetup()
 	test.GenericAddressTest(t, setup)
 }
 
@@ -82,7 +82,7 @@ func TestBackend(t *testing.T) {
 	assert.NotNil(t, err, "Conversion from wrong address should fail")
 }
 
-func newTestSetup() *test.Setup {
+func newSetup() *test.Setup {
 	return &test.Setup{
 		Wallet:     new(Wallet),
 		Path:       "./" + keyDir,
@@ -104,29 +104,16 @@ func connectTmpKeystore(t *testing.T) *Wallet {
 // Benchmarking part starts here
 
 func BenchmarkGenericAccount(b *testing.B) {
-	setup := newBenchSetup()
+	setup := newSetup()
 	test.GenericAccountBenchmark(b, setup)
 }
 
 func BenchmarkGenericWallet(b *testing.B) {
-	setup := newBenchSetup()
+	setup := newSetup()
 	test.GenericWalletBenchmark(b, setup)
 }
 
 func BenchmarkGenericBackend(b *testing.B) {
-	setup := newBenchSetup()
+	setup := newSetup()
 	test.GenericBackendBenchmark(b, setup)
-}
-
-func newBenchSetup() *test.Setup {
-	// Filled with the same data as the testing
-	return &test.Setup{
-		Wallet:     new(Wallet),
-		Path:       "./" + keyDir,
-		WalletPW:   password,
-		AccountPW:  password,
-		Backend:    new(Backend),
-		AddrString: sampleAddr,
-		DataToSign: []byte(dataToSign),
-	}
 }
