@@ -23,7 +23,6 @@ type Setup struct {
 	Backend    wallet.Backend // backend implementation
 	// Signature tests
 	DataToSign []byte
-	signature  []byte
 }
 
 // GenericWalletTest runs a test suite designed to test the general functionality of an implementation of wallet.

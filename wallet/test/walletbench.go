@@ -55,12 +55,11 @@ func benchAccountSign(b *testing.B, s *Setup) {
 	}
 
 	for n := 0; n < b.N; n++ {
-		data, err := perunAcc.SignData(s.DataToSign)
+		_, err := perunAcc.SignData(s.DataToSign)
 
 		if err != nil {
 			b.Fatal(err)
 		}
-		s.signature = data
 	}
 }
 
@@ -72,12 +71,11 @@ func benchAccountSignWithPW(b *testing.B, s *Setup) {
 	}
 
 	for n := 0; n < b.N; n++ {
-		data, err := perunAcc.SignDataWithPW(s.AccountPW, s.DataToSign)
+		_, err := perunAcc.SignDataWithPW(s.AccountPW, s.DataToSign)
 
 		if err != nil {
 			b.Fatal(err)
 		}
-		s.signature = data
 	}
 }
 
@@ -141,24 +139,25 @@ func benchWalletAccounts(b *testing.B, s *Setup) {
 // GenericBackendBenchmark runs a suite designed to benchmark the general speed of an implementation of a Backend.
 // This function should be called by every implementation of the Backend interface.
 func GenericBackendBenchmark(b *testing.B, s *Setup) {
-	s.Wallet.Connect(s.Path, s.WalletPW)
-	perunAcc := s.Wallet.Accounts()[0]
-	signature, err := perunAcc.SignDataWithPW(s.AccountPW, s.DataToSign)
-	if err != nil {
-		b.Fatal(signature)
-	}
-	s.signature = signature
-
 	b.Run("VerifySig", func(t *testing.B) { benchBackendVerifySig(t, s) })
 	b.Run("FromString", func(t *testing.B) { benchBackendNewAddressFromString(t, s) })
 	b.Run("FromBytes", func(t *testing.B) { benchBackendNewAddressFromBytes(t, s) })
 }
 
 func benchBackendVerifySig(b *testing.B, s *Setup) {
+	// We dont want to measure the SignDataWithPW here, just need it for the verification
+	b.StopTimer()
+	s.Wallet.Connect(s.Path, s.WalletPW)
 	perunAcc := s.Wallet.Accounts()[0]
+	signature, err := perunAcc.SignDataWithPW(s.AccountPW, s.DataToSign)
+
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.StartTimer()
 
 	for n := 0; n < b.N; n++ {
-		ok, err := s.Backend.VerifySignature(s.DataToSign, s.signature, perunAcc.Address())
+		ok, err := s.Backend.VerifySignature(s.DataToSign, signature, perunAcc.Address())
 
 		if ok != true {
 			b.Fatal(err)
