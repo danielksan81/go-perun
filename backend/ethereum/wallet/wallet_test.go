@@ -52,11 +52,8 @@ func TestAddress(t *testing.T) {
 	nilAddr := common.BytesToAddress(make([]byte, 40, 40))
 
 	assert.Equal(t, nilAddr.Bytes(), unsetAccount.Address().Bytes(), "Unset address should be nil")
-
 	ethAcc.Address.SetBytes(perunAcc.Address().Bytes())
-
 	assert.Equal(t, ethAcc.Address.Bytes(), perunAcc.Address().Bytes(), "Bytes should return same value as internal structure")
-
 	assert.NotEqual(t, nil, ethAcc.Address.Bytes(), "Set address should not be nil")
 }
 
@@ -77,17 +74,11 @@ func TestBackend(t *testing.T) {
 	addr, err := backend.NewAddressFromString(sampleAddr)
 
 	assert.Nil(t, err, "Conversion of valid address should work")
-
 	_, err = backend.NewAddressFromBytes(addr.Bytes())
-
 	assert.Nil(t, err, "Conversion of valid address should work")
-
 	_, err = backend.NewAddressFromBytes([]byte(invalidAddr))
-
 	assert.NotNil(t, err, "Conversion from wrong address should fail")
-
 	_, err = backend.NewAddressFromString(invalidAddr)
-
 	assert.NotNil(t, err, "Conversion from wrong address should fail")
 }
 
