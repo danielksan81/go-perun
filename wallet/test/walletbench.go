@@ -117,10 +117,10 @@ func benchWalletConnectAndDisconnect(b *testing.B, s *Setup) {
 }
 
 func benchWalletContains(b *testing.B, s *Setup) {
-	isIn := s.Wallet.Accounts()[0]
+	account := s.Wallet.Accounts()[0]
 
 	for n := 0; n < b.N; n++ {
-		in := s.Wallet.Contains(isIn)
+		in := s.Wallet.Contains(account)
 
 		if !in {
 			b.Fatal("address not found")
