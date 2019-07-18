@@ -7,27 +7,27 @@ package wallet
 import (
 	"testing"
 
-	"perun.network/go-perun/wallet/bench"
+	"perun.network/go-perun/wallet/test"
 )
 
 func BenchmarkGenericAccount(b *testing.B) {
 	setup := newBenchSetup()
-	bench.GenericAccountBenchmark(b, setup)
+	test.GenericAccountBenchmark(b, setup)
 }
 
 func BenchmarkGenericWallet(b *testing.B) {
 	setup := newBenchSetup()
-	bench.GenericWalletBenchmark(b, setup)
+	test.GenericWalletBenchmark(b, setup)
 }
 
 func BenchmarkGenericBackend(b *testing.B) {
 	setup := newBenchSetup()
-	bench.GenericBackendBenchmark(b, setup)
+	test.GenericBackendBenchmark(b, setup)
 }
 
-func newBenchSetup() *bench.Setup {
+func newBenchSetup() *test.Setup {
 	// Filled with the same data as the testing
-	return &bench.Setup{
+	return &test.Setup{
 		Wallet:     new(Wallet),
 		Path:       "./" + keyDir,
 		WalletPW:   password,
@@ -35,6 +35,5 @@ func newBenchSetup() *bench.Setup {
 		Backend:    new(Backend),
 		AddrString: sampleAddr,
 		DataToSign: []byte(dataToSign),
-		Signature:  []byte(signedData),
 	}
 }

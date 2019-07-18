@@ -19,7 +19,6 @@ const (
 	sampleAddr  = "0x1234560000000000000000000000000000000000"
 	invalidAddr = "0x12345600000000000000000000000000000000001"
 	dataToSign  = "SomeLongDataThatShouldBeSignedPlease"
-	signedData  = ""
 
 	keystoreAddr = "0xf4c288068b32474dedc3620233c"
 	keyStorePath = "UTC--2019-06-07T12-12-48.775026092Z--3c5a96ff258b1f4c288068b32474dedc3620233c"
@@ -27,20 +26,20 @@ const (
 
 func TestGenericWalletTests(t *testing.T) {
 	t.Parallel()
-	setup := newTestSetup(t)
-	test.GenericWalletTest(setup)
+	setup := newTestSetup()
+	test.GenericWalletTest(t, setup)
 }
 
 func TestGenericSignatureTests(t *testing.T) {
 	t.Parallel()
-	setup := newTestSetup(t)
-	test.GenericSignatureTest(setup)
+	setup := newTestSetup()
+	test.GenericSignatureTest(t, setup)
 }
 
 func TestGenericAddressTests(t *testing.T) {
 	t.Parallel()
-	setup := newTestSetup(t)
-	test.GenericAddressTest(setup)
+	setup := newTestSetup()
+	test.GenericAddressTest(t, setup)
 }
 
 func TestAddress(t *testing.T) {
@@ -92,9 +91,8 @@ func TestBackend(t *testing.T) {
 	assert.NotNil(t, err, "Conversion from wrong address should fail")
 }
 
-func newTestSetup(t *testing.T) *test.Setup {
+func newTestSetup() *test.Setup {
 	return &test.Setup{
-		T:          t,
 		Wallet:     new(Wallet),
 		Path:       "./" + keyDir,
 		WalletPW:   password,
@@ -102,7 +100,6 @@ func newTestSetup(t *testing.T) *test.Setup {
 		Backend:    new(Backend),
 		AddrString: sampleAddr,
 		DataToSign: []byte(dataToSign),
-		SignedData: []byte(signedData),
 	}
 }
 

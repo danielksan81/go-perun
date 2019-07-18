@@ -2,28 +2,11 @@
 // This file is part of go-perun. Use of this source code is governed by a
 // MIT-style license that can be found in the LICENSE file.
 
-package bench // import "perun.network/go-perun/wallet/bench"
+package test // import "perun.network/go-perun/wallet/test"
 
 import (
 	"testing"
-
-	"perun.network/go-perun/wallet"
 )
-
-// Setup provides all objects needed for the generic benchmarks
-type Setup struct {
-	// Wallet tests
-	Wallet    wallet.Wallet // wallet implementation, should be uninitialized
-	Path      string        // path to a valid wallet, should contain exactly one account
-	WalletPW  string        // password to a valid wallet
-	AccountPW string        // password to the account of the wallet
-	// Address tests
-	AddrString string         // valid address, should not be in wallet
-	Backend    wallet.Backend // backend implementation
-	// Signature tests
-	DataToSign []byte
-	Signature  []byte
-}
 
 // GenericAccountBenchmark runs a suite designed to benchmark the general speed of an implementation of an Account.
 // This function should be called by every implementation of the Account interface.
@@ -77,7 +60,7 @@ func benchAccountSign(b *testing.B, s *Setup) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		s.Signature = data
+		s.signature = data
 	}
 }
 
@@ -94,7 +77,7 @@ func benchAccountSignWithPW(b *testing.B, s *Setup) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		s.Signature = data
+		s.signature = data
 	}
 }
 
@@ -164,7 +147,7 @@ func GenericBackendBenchmark(b *testing.B, s *Setup) {
 	if err != nil {
 		b.Fatal(signature)
 	}
-	s.Signature = signature
+	s.signature = signature
 
 	b.Run("SigVerify", func(t *testing.B) { benchBackendSigVerify(t, s) })
 	b.Run("FromString", func(t *testing.B) { benchBackendNewAddressFromString(t, s) })
@@ -175,7 +158,7 @@ func benchBackendSigVerify(b *testing.B, s *Setup) {
 	perunAcc := s.Wallet.Accounts()[0]
 
 	for n := 0; n < b.N; n++ {
-		ok, err := s.Backend.VerifySignature(s.DataToSign, s.Signature, perunAcc.Address())
+		ok, err := s.Backend.VerifySignature(s.DataToSign, s.signature, perunAcc.Address())
 
 		if ok != true {
 			b.Fatal(err)
