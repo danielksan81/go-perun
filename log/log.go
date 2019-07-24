@@ -75,3 +75,35 @@ type Logger interface {
 	WithFields(Fields) Logger
 	WithError(error) Logger
 }
+
+func Printf(format string, args ...interface{}) { Log.Printf(format, args) }
+func Print(args ...interface{})                 { Log.Print(args) }
+func Println(args ...interface{})               { Log.Println(args) }
+
+func Fatalf(format string, args ...interface{}) { Log.Fatalf(format, args) }
+func Fatal(args ...interface{})                 { Log.Fatal(args) }
+func Fatalln(args ...interface{})               { Log.Fatalln(args) }
+
+func Panicf(format string, args ...interface{}) { Log.Panicf(format, args) }
+func Panic(args ...interface{})                 { Log.Panic(args) }
+func Panicln(args ...interface{})               { Log.Panicln(args) }
+
+func Tracef(format string, args ...interface{}) { Log.Tracef(format, args) }
+func Trace(args ...interface{})                 { Log.Trace(args) }
+func Traceln(args ...interface{})               { Log.Traceln(args) }
+
+func Debugf(format string, args ...interface{}) { Log.Debugf(format, args) }
+func Debug(args ...interface{})                 { Log.Debug(args) }
+func Debugln(args ...interface{})               { Log.Debugln(args) }
+
+func Infof(format string, args ...interface{}) { Log.Infof(format, args) }
+func Info(args ...interface{})                 { Log.Info(args) }
+func Infoln(args ...interface{})               { Log.Infoln(args) }
+
+func Warnf(format string, args ...interface{}) { Log.Warnf(format, args) }
+func Warn(args ...interface{})                 { Log.Warn(args) }
+func Warnln(args ...interface{})               { Log.Warnln(args) }
+
+func Errorf(format string, args ...interface{}) { Log.Errorf(format, args) }
+func Error(args ...interface{})                 { Log.Error(args) }
+func Errorln(args ...interface{})               { Log.Errorln(args) }
