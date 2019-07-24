@@ -4,6 +4,8 @@
 
 package log
 
+import "os"
+
 // None is a logger that doesn't do anything
 var None Logger = &none{}
 
@@ -12,12 +14,6 @@ type none struct{}
 func (none) Printf(string, ...interface{}) {}
 func (none) Print(...interface{})          {}
 func (none) Println(...interface{})        {}
-func (none) Fatalf(string, ...interface{}) {}
-func (none) Fatal(...interface{})          {}
-func (none) Fatalln(...interface{})        {}
-func (none) Panicf(string, ...interface{}) {}
-func (none) Panic(...interface{})          {}
-func (none) Panicln(...interface{})        {}
 func (none) Tracef(string, ...interface{}) {}
 func (none) Debugf(string, ...interface{}) {}
 func (none) Infof(string, ...interface{})  {}
@@ -33,6 +29,13 @@ func (none) Debugln(...interface{})        {}
 func (none) Infoln(...interface{})         {}
 func (none) Warnln(...interface{})         {}
 func (none) Errorln(...interface{})        {}
+
+func (none) Fatal(...interface{})                      { os.Exit(1) }
+func (none) Fatalf(string, ...interface{})             { os.Exit(1) }
+func (none) Fatalln(...interface{})                    { os.Exit(1) }
+func (none) Panic(args ...interface{})                 { panic(args) }
+func (none) Panicf(format string, args ...interface{}) { panic(args) }
+func (none) Panicln(args ...interface{})               { panic(args) }
 
 func (n *none) WithField(key string, value interface{}) Logger {
 	return n
