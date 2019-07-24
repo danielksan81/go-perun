@@ -20,7 +20,7 @@ var (
 
 	// Log is the framework logger. Framework users should set this variable to
 	// their logger. It is set to the None non-logging logger by default.
-	Log Logger = None
+	Log = None
 )
 
 // StdLogger describes the interface of the standard library log package logger.
