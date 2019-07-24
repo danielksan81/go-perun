@@ -4,7 +4,10 @@
 
 package log
 
-import "os"
+import (
+	"fmt"
+	"os"
+)
 
 // None is a logger that doesn't do anything
 var None Logger = &none{}
@@ -30,12 +33,24 @@ func (none) Infoln(...interface{})         {}
 func (none) Warnln(...interface{})         {}
 func (none) Errorln(...interface{})        {}
 
-func (none) Fatal(...interface{})                      { os.Exit(1) }
-func (none) Fatalf(string, ...interface{})             { os.Exit(1) }
-func (none) Fatalln(...interface{})                    { os.Exit(1) }
 func (none) Panic(args ...interface{})                 { panic(args) }
-func (none) Panicf(format string, args ...interface{}) { panic(args) }
+func (none) Panicf(format string, args ...interface{}) { panic(fmt.Sprintf(format, args...)) }
 func (none) Panicln(args ...interface{})               { panic(args) }
+
+func (none) Fatal(args ...interface{}) {
+	fmt.Fprint(os.Stderr, args...)
+	os.Exit(1)
+}
+
+func (none) Fatalf(format string, args ...interface{}) {
+	fmt.Fprintf(os.Stderr, format, args...)
+	os.Exit(1)
+}
+
+func (none) Fatalln(args ...interface{}) {
+	fmt.Fprintln(os.Stderr, args...)
+	os.Exit(1)
+}
 
 func (n *none) WithField(key string, value interface{}) Logger {
 	return n

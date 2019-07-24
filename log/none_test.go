@@ -44,7 +44,6 @@ func TestNone(t *testing.T) {
 	a.Panics(func() { None.Panicf("") } )
 	a.Panics(func() { None.Panic() } )
 	a.Panics(func() { None.Panicln() } ) 
-
 	
 	a.Equal(None.WithField("", ""), None)
 	a.Equal(None.WithFields(nil), None)
