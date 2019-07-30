@@ -5,11 +5,12 @@
 package test // import "perun.network/go-perun/wallet/test"
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	peruniotest "perun.network/go-perun/pkg/io/test"
 	"perun.network/go-perun/wallet"
 )
 
@@ -122,6 +123,14 @@ func GenericSignatureTest(t *testing.T, s *Setup) {
 	assert.Nil(t, s.Wallet.Disconnect(), "Expected disconnect to succeed")
 }
 
+// testAddressSerializable Tests the io.Serializeable interface of an wallet.Address
+func testAddressSerializable(t *testing.T, s *Setup) {
+	addr, err := s.Backend.NewAddressFromString(s.AddrString)
+	require.Nil(t, err, "String parsing of Address should work")
+
+	peruniotest.GenericSerializableTest(t, addr)
+}
+
 // GenericAddressTest runs a test suite designed to test the general functionality of addresses.
 // This function should be called by every implementation of the wallet interface.
 func GenericAddressTest(t *testing.T, s *Setup) {
@@ -140,13 +149,5 @@ func GenericAddressTest(t *testing.T, s *Setup) {
 	assert.False(t, init.Equals(unInit), "Expected non-equality to other")
 	assert.True(t, unInit.Equals(unInit), "Expected equality of zero to itself")
 
-	var buf bytes.Buffer
-	addr.Encode(&buf)
-	assert.Equal(t, buf.Bytes(), addr.Bytes(), "Encoding address into buffer")
-	addrDec, err := s.Backend.DecodeAddress(&buf)
-	assert.Nil(t, err, "Decoding address from buffer")
-	assert.Equal(t, addr.Bytes(), addrDec.Bytes(), "Decoding address from buffer")
-
-	_, err = s.Backend.DecodeAddress(&buf)
-	assert.NotNil(t, err, "Decoding address from empty stream should fail")
+	t.Run("io.Serializable", func(t *testing.T) { testAddressSerializable(t, s) })
 }
