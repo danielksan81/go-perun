@@ -54,7 +54,7 @@ func (b *BigInt) Decode(reader io.Reader) error {
 // Encode writes a big.Int to the stream.
 func (b BigInt) Encode(writer io.Writer) error {
 	if b.Int == nil {
-		log.Panicln("Logic error: tried to encode nil BigInt")
+		log.Panicln("logic error: tried to encode nil big.Int")
 	}
 
 	bytes := b.Bytes()
