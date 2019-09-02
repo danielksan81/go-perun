@@ -20,5 +20,5 @@ type App interface {
 	// invalidity of the transition, if it is not valid. It should return a normal
 	// error (with attached stacktrace from pkg/errors) if there was any other
 	// runtime error, not related to the invalidity of the transition itself.
-	ValidTransition(parameters *Params, from, to *State) (bool, error)
+	ValidTransition(parameters *Params, from, to *State) (bool, error, error)
 }
