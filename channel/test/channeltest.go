@@ -29,22 +29,27 @@ type Setup struct {
 	// State2 is a random state with parameters `Params2` and must differ in all fields from `State`
 	State2 *channel.State
 
+	// StateParamFields is a mapping of the public member names of `Param` to bool, valid values:
+	// ChallengeDuration, App. 'id' and 'Nonce' are excluded.
+	// True indicates that the member should not be includes into the calculation of ChannelID but not
+	// in Sign and Verify. So to say: they are a treated as part of the state.
+	StateParamFields map[string]bool
+
 	// Account is a random account
 	Account wallet.Account
-	// Account2 is a random account and must differ in all fields from `Account`
-	Account2 wallet.Account
+
 	// RandomAddress returns a new random address
 	RandomAddress addressCreator
 }
 
 // GenericBackendTest tests the interface functions of the global channel.Backend with the passed test data.
-// The global backend must be set prior to this with backend.Set{…} .
 func GenericBackendTest(t *testing.T, s *Setup) {
+	require := require.New(t)
 	ID := channel.ChannelID(s.Params)
-	require.Equal(t, ID, s.State.ID, "ChannelID(params) should match the States ID")
-	require.Equal(t, ID, s.Params.ID(), "ChannelID(params) should match the Params ID")
-	require.NotNil(t, s.State.Data, "State data can not be nil")
-	require.NotNil(t, s.State2.Data, "State2 data can not be nil")
+	require.Equal(ID, s.State.ID, "ChannelID(params) should match the States ID")
+	require.Equal(ID, s.Params.ID(), "ChannelID(params) should match the Params ID")
+	require.NotNil(s.State.Data, "State data can not be nil")
+	require.NotNil(s.State2.Data, "State2 data can not be nil")
 
 	t.Run("ChannelID", func(t *testing.T) {
 		genericChannelIDTest(t, s)
@@ -59,238 +64,278 @@ func GenericBackendTest(t *testing.T, s *Setup) {
 	})
 }
 
+func genericChannelIDTest(t *testing.T, s *Setup) {
+	require.NotNil(t, s.Params.Parts, "params.Parts can not be nil")
+	assert.Panics(t, func() { channel.ChannelID(nil) }, "ChannelID(nil) should panic")
+
+	// Check that modifying the StateParamFields changed the ID and all others don't
+	for _, modStateParamFields := range buildStateParamFields() {
+		for _, modParams := range buildModifiedParams(s.Params, s.Params2, modStateParamFields, s) {
+			ID := channel.ChannelID(&modParams)
+
+			// Should the ChannelID differ or not?
+			if (modStateParamFields["ChallengeDuration"] == s.StateParamFields["ChallengeDuration"] && modStateParamFields["ChallengeDuration"]) ||
+				(modStateParamFields["App"] == s.StateParamFields["App"] && modStateParamFields["App"]) {
+				assert.Equal(t, ID, s.State.ID, "Channel ids should not differ")
+			} else {
+				assert.NotEqual(t, ID, s.State.ID, "Channel ids should differ")
+			}
+		}
+	}
+}
+
+func genericSignTest(t *testing.T, s *Setup) {
+	assert := assert.New(t)
+
+	_, err := channel.Sign(nil, s.Params, s.State)
+	assert.Error(err, "Sign should return an error")
+	_, err = channel.Sign(s.Account, nil, s.State)
+	assert.Error(err, "Sign should return an error")
+	_, err = channel.Sign(s.Account, s.Params, nil)
+	assert.Error(err, "Sign should return an error")
+
+	_, err1 := channel.Sign(s.Account, s.Params, s.State)
+	assert.NoError(err1, "Sign should not return an error")
+}
+
 func genericVerifyTest(t *testing.T, s *Setup) {
+	assert := assert.New(t)
 	addr := s.Account.Address()
 	require.Equal(t, channel.ChannelID(s.Params), s.Params.ID(), "Invalid test params")
 	sig, err := channel.Sign(s.Account, s.Params, s.State)
-	require.NoError(t, err, "Sign should work")
+	require.NoError(t, err, "Sign should not return an error")
 
 	ok, err := channel.Verify(addr, s.Params, s.State, sig)
-	assert.NoError(t, err, "Verify should work")
-	assert.True(t, ok, "Verify should not work")
+	assert.NoError(err, "Verify should not return an error")
+	assert.True(ok, "Verify should return true")
 
 	// Different state and same params
-	ok, err = channel.Verify(addr, s.Params, s.State2, sig)
-	assert.NoError(t, err, "Verify should work")
-	assert.False(t, ok, "Verify should not work")
+	for _, modState := range buildModifiedStates(s.State, s.State2) {
+		ok, err = channel.Verify(addr, s.Params, &modState, sig)
+		assert.NoError(err, "Verify should not return an error")
+		assert.False(ok, "Verify should return false")
+	}
 
-	// Different params and same state
-	ok, err = channel.Verify(addr, s.Params2, s.State, sig)
-	assert.NoError(t, err, "Verify should work")
-	assert.False(t, ok, "Verify should not work")
+	// Check that modifying the StateParamFields invalidates the Signature and all others don't
+	for _, modStateParamFields := range buildStateParamFields() {
+		for _, modParams := range buildModifiedParams(s.Params, s.Params2, modStateParamFields, s) {
+			ok, err = channel.Verify(addr, &modParams, s.State, sig)
 
-	// Different params and different state
-	for _, fakeParams := range buildModifiedParams(s.Params, s.Params2, s) {
-		for _, fakeState := range buildModifiedStates(s.State, s.State2) {
-			ok, err = channel.Verify(addr, &fakeParams, &fakeState, sig)
-			assert.NoError(t, err, "Verify should not work")
-			assert.False(t, ok, "Verify should not work")
+			if (modStateParamFields["ChallengeDuration"] == s.StateParamFields["ChallengeDuration"] && !modStateParamFields["ChallengeDuration"]) ||
+				(modStateParamFields["App"] == s.StateParamFields["App"] && !modStateParamFields["App"]) {
+				assert.NoError(err, "Verify should not return an error")
+				assert.True(ok, "Verify should return true")
+			} else {
+				assert.NoError(err, "Verify should not return an error")
+				assert.False(ok, "Verify should return false")
+			}
+		}
+	}
+
+	// Check that modifying the StateParamFields or the state invalidates the Signature
+	for _, modStateParamFields := range buildStateParamFields() {
+		for _, modParams := range buildModifiedParams(s.Params, s.Params2, modStateParamFields, s) {
+			for _, modState := range buildModifiedStates(s.State, s.State2) {
+				ok, err = channel.Verify(addr, &modParams, &modState, sig)
+				assert.NoError(err, "Verify should not return an error")
+				assert.False(ok, "Verify should return false")
+			}
 		}
 	}
 
 	// Different address and same state and params
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 10; i++ {
 		ok, err := channel.Verify(s.RandomAddress(), s.Params, s.State, sig)
-		assert.NoError(t, err, "Verify should work")
-		assert.False(t, ok, "Verify should not work")
+		assert.NoError(err, "Verify should not return an error")
+		assert.False(ok, "Verify should return false")
 	}
+}
+
+func buildStateParamFields() (ret []map[string]bool) {
+	{
+		modStateParamFields := make(map[string]bool)
+		modStateParamFields["ChallengeDuration"] = true
+		ret = append(ret, modStateParamFields)
+	}
+	{
+		modStateParamFields := make(map[string]bool)
+		modStateParamFields["Parts"] = true
+		ret = append(ret, modStateParamFields)
+	}
+	{
+		modStateParamFields := make(map[string]bool)
+		modStateParamFields["Parts0"] = true
+		ret = append(ret, modStateParamFields)
+	}
+	{
+		modStateParamFields := make(map[string]bool)
+		modStateParamFields["App"] = true
+		ret = append(ret, modStateParamFields)
+	}
+	{
+		modStateParamFields := make(map[string]bool)
+		modStateParamFields["Nonce"] = true
+		ret = append(ret, modStateParamFields)
+	}
+
+	return
 }
 
 // buildModifiedStates returns a slice of States that are different from `s1` assuming that `s2` differs in
 // every member from `s1`.
 func buildModifiedStates(s1, s2 *channel.State) (ret []channel.State) {
-	ret = append(ret, *s2)
-
 	// Modify state
 	{
-		// Modify complete State
+		// Modify complete state
 		{
-			fakeState := *s2
-			ret = append(ret, fakeState)
+			modState := *s2
+			ret = append(ret, modState)
 		}
 		// Modify ID
 		{
-			fakeState := *s1
-			fakeState.ID = s2.ID
-			ret = append(ret, fakeState)
+			modState := *s1
+			modState.ID = s2.ID
+			ret = append(ret, modState)
 		}
 		// Modify Version
 		{
-			fakeState := *s1
-			fakeState.Version = s2.Version
-			ret = append(ret, fakeState)
+			modState := *s1
+			modState.Version = s2.Version
+			ret = append(ret, modState)
 		}
 		// Modify Allocation
 		{
 			// Modify complete Allocation
 			{
-				fakeState := *s1
-				fakeState.Allocation = s2.Allocation
-				ret = append(ret, fakeState)
+				modState := *s1
+				modState.Allocation = s2.Allocation
+				ret = append(ret, modState)
 			}
 			// Modify Assets
 			{
 				// Modify complete Assets
 				{
-					fakeState := *s1
-					fakeState.Allocation.Assets = s2.Allocation.Assets
-					ret = append(ret, fakeState)
+					modState := *s1
+					modState.Allocation.Assets = s2.Allocation.Assets
+					ret = append(ret, modState)
 				}
 				// Modify Assets[0]
+
 				{
-					fakeState := *s1
-					fakeState.Assets = make([]io.Serializable, len(s1.Allocation.Assets))
-					copy(fakeState.Allocation.Assets, s1.Allocation.Assets)
-					fakeState.Allocation.Assets[0] = s2.Allocation.Assets[0]
-					ret = append(ret, fakeState)
+					modState := *s1
+					modState.Assets = make([]io.Serializable, len(s1.Allocation.Assets))
+					copy(modState.Allocation.Assets, s1.Allocation.Assets)
+					modState.Allocation.Assets[0] = s2.Allocation.Assets[0]
+					ret = append(ret, modState)
 				}
 			}
 			// Modify OfParts
 			{
 				// Modify complete OfParts
 				{
-					fakeState := *s1
-					fakeState.Allocation.OfParts = s2.Allocation.OfParts
-					ret = append(ret, fakeState)
+					modState := *s1
+					modState.Allocation.OfParts = s2.Allocation.OfParts
+					ret = append(ret, modState)
 				}
 				// Modify OfParts[0]
 				{
-					fakeState := *s1
-					fakeState.Allocation.OfParts[0] = s2.Allocation.OfParts[0]
-					ret = append(ret, fakeState)
+					modState := *s1
+					modState.Allocation.OfParts[0] = s2.Allocation.OfParts[0]
+					ret = append(ret, modState)
 				}
 				// Modify OfParts[0][0]
 				{
-					fakeState := *s1
-					fakeState.Allocation.OfParts[0][0] = s2.Allocation.OfParts[0][0]
-					ret = append(ret, fakeState)
+					modState := *s1
+					modState.Allocation.OfParts[0][0] = s2.Allocation.OfParts[0][0]
+					ret = append(ret, modState)
 				}
 			}
 			// Modify Locked
 			{
 				// Modify complete Locked
 				{
-					fakeState := *s1
-					fakeState.Allocation.Locked = s2.Allocation.Locked
-					ret = append(ret, fakeState)
+					modState := *s1
+					modState.Allocation.Locked = s2.Allocation.Locked
+					ret = append(ret, modState)
 				}
 				// Modify AppID
 				{
-					fakeState := *s1
-					fakeState.Allocation.Locked[0].ID = s2.Allocation.Locked[0].ID
-					ret = append(ret, fakeState)
+					modState := *s1
+					modState.Allocation.Locked[0].ID = s2.Allocation.Locked[0].ID
+					ret = append(ret, modState)
 				}
 				// Modify Bals
 				{
-					fakeState := *s1
-					fakeState.Allocation.Locked[0].Bals = s2.Allocation.Locked[0].Bals
-					ret = append(ret, fakeState)
+					modState := *s1
+					modState.Allocation.Locked[0].Bals = s2.Allocation.Locked[0].Bals
+					ret = append(ret, modState)
 				}
 				// Modify Bals[0]
 				{
-					fakeState := *s1
-					fakeState.Allocation.Locked[0].Bals[0] = s2.Allocation.Locked[0].Bals[0]
-					ret = append(ret, fakeState)
+					modState := *s1
+					modState.Allocation.Locked[0].Bals[0] = s2.Allocation.Locked[0].Bals[0]
+					ret = append(ret, modState)
 				}
 			}
 		}
 		// Modify Data
 		{
-			fakeState := *s1
-			fakeState.Data = s2.Data
-			ret = append(ret, fakeState)
+			modState := *s1
+			modState.Data = s2.Data
+			ret = append(ret, modState)
 		}
 		// Modify IsFinal
 		{
-			fakeState := *s1
-			fakeState.IsFinal = s2.IsFinal
-			ret = append(ret, fakeState)
+			modState := *s1
+			modState.IsFinal = s2.IsFinal
+			ret = append(ret, modState)
 		}
 	}
+
 	return
 }
 
 // buildModifiedParams returns a slice of Params that are different from `p1` assuming that `p2` differs in
 // every member from `p1`.
-func buildModifiedParams(p1, p2 *channel.Params, s *Setup) (ret []channel.Params) {
-	ret = append(ret, *p2)
-
+func buildModifiedParams(p1, p2 *channel.Params, fieldsToModify map[string]bool, s *Setup) (ret []channel.Params) {
 	// Modify params
 	{
 		// Modify ChallengeDuration
-		{
-			fakeParams := *p1
-			fakeParams.ChallengeDuration = p2.ChallengeDuration
-			ret = append(ret, fakeParams)
+		if fieldsToModify["ChallengeDuration"] {
+			modParams := *p1
+			modParams.ChallengeDuration = p2.ChallengeDuration
+			ret = append(ret, modParams)
 		}
 		// Modify Parts
 		{
 			// Modify complete Parts
-			{
-				fakeParams := *p1
-				fakeParams.Parts = p2.Parts
-				ret = append(ret, fakeParams)
+			if fieldsToModify["Parts"] {
+				modParams := *p1
+				modParams.Parts = p2.Parts
+				ret = append(ret, modParams)
 			}
 			// Modify Parts[0]
-			{
-				fakeParams := *p1
-				fakeParams.Parts = make([]wallet.Address, len(p1.Parts))
-				copy(fakeParams.Parts, p1.Parts)
-				fakeParams.Parts[0] = s.RandomAddress()
-				ret = append(ret, fakeParams)
+			if fieldsToModify["Parts0"] {
+				modParams := *p1
+				modParams.Parts = make([]wallet.Address, len(p1.Parts))
+				copy(modParams.Parts, p1.Parts)
+				modParams.Parts[0] = s.RandomAddress()
+				ret = append(ret, modParams)
 			}
 		}
 		// Modify App
-		{
-			fakeParams := *p1
-			fakeParams.App = p2.App
-			ret = append(ret, fakeParams)
+		if fieldsToModify["App"] {
+			modParams := *p1
+			modParams.App = p2.App
+			ret = append(ret, modParams)
 		}
 		// Modify Nonce
-		{
-			fakeParams := *p1
-			fakeParams.Nonce = p2.Nonce
-			ret = append(ret, fakeParams)
+		if fieldsToModify["Nonce"] {
+			modParams := *p1
+			modParams.Nonce = p2.Nonce
+			ret = append(ret, modParams)
 		}
 	}
 
 	return
-}
-
-func genericSignTest(t *testing.T, s *Setup) {
-	_, err := channel.Sign(nil, s.Params, s.State)
-	assert.Error(t, err, "Sign should fail")
-	_, err = channel.Sign(s.Account, nil, s.State)
-	assert.Error(t, err, "Sign should fail")
-	_, err = channel.Sign(s.Account, s.Params, nil)
-	assert.Error(t, err, "Sign should fail")
-
-	// Test that different inputs produce different signatures
-	sig1, err1 := channel.Sign(s.Account, s.Params, s.State)
-	assert.Nil(t, err1, "Sign should work")
-
-	for _, fakeParams := range buildModifiedParams(s.Params, s.Params2, s) {
-		sig2, err2 := channel.Sign(s.Account, &fakeParams, s.State)
-
-		assert.Nil(t, err2, "Sign should work")
-		assert.NotEqual(t, sig1, sig2, "Sign for different params should differ")
-	}
-
-	{
-		sig2, err2 := channel.Sign(s.Account, s.Params2, s.State2)
-
-		assert.Nil(t, err2, "Sign should work")
-		assert.NotEqual(t, sig1, sig2, "Sign for different state and params should differ")
-	}
-}
-
-func genericChannelIDTest(t *testing.T, s *Setup) {
-	require.NotNil(t, s.Params.Parts, "params.Parts can not be nil")
-	assert.Panics(t, func() { channel.ChannelID(nil) }, "ChannelID(nil) should panic")
-
-	// Check that modifying the state changes the id
-	for _, fakeParams := range buildModifiedParams(s.Params, s.Params2, s) {
-		ID := channel.ChannelID(&fakeParams)
-		assert.NotEqual(t, ID, s.State.ID, "Channel ids should differ")
-	}
 }

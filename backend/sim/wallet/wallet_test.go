@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	
+
 	"perun.network/go-perun/wallet"
 	"perun.network/go-perun/wallet/test"
 )
@@ -61,7 +61,7 @@ func TestGenericTests(t *testing.T) {
 	// NewRandomAddress is also tested in channel_test but since they are two packages,
 	// we also need to test it here
 	rng := rand.New(rand.NewSource(1337))
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 10; i++ {
 		assert.NotEqual(t, NewRandomAddress(rng), NewRandomAddress(rng), "Two random accounts should not be the same")
 	}
 }
