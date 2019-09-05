@@ -110,8 +110,14 @@ func (p *Peer) replaceConn(conn Conn) bool {
 	}
 
 	// Clear the retrySend and retryRecv channels.
-	_, _ = <-p.retrySend
-	_, _ = <-p.retryRecv
+	select {
+	case <-p.retrySend:
+	default:
+	}
+	select {
+	case <-p.retryRecv:
+	default:
+	}
 
 	// Close the old connection to fail all send and receive calls.
 	p.conn.Close()
