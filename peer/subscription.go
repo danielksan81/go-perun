@@ -48,10 +48,8 @@ func (s *subscriptions) put(m msg.Msg, p *Peer) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
-	tuple := MsgTuple{p, m}
-	subs := s.subs[m.Category()]
-	for _, rec := range subs {
-		rec.msgs <- tuple
+	for _, rec := range s.subs[m.Category()] {
+		rec.msgs <- MsgTuple{p, m}
 	}
 }
 

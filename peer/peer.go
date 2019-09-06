@@ -28,7 +28,6 @@ type Peer struct {
 
 	replacing sync.Mutex // Protects conn from replaceConn and Close.
 	sending   sync.Mutex // Blocks multiple Send calls.
-	recving   sync.Mutex // Blocks multiple Recv calls.
 	connMutex sync.Mutex // Protect against data race when updating conn.
 
 	closed    chan struct{} // Indicates whether the peer is closed.
@@ -40,10 +39,6 @@ type Peer struct {
 // If the transmission fails, blocks until the connection is repaired and
 // retries to receive the message. Fails if the peer is closed via Close().
 func (p *Peer) recv() msg.Msg {
-	// Only one message can be received at a time.
-	p.recving.Lock()
-	defer p.recving.Unlock()
-
 	// Repeatedly attempt to receive a message.
 	for {
 		// Protect against race with concurrent replaceConn().
@@ -84,10 +79,6 @@ func (p *Peer) recvLoop() {
 // If the transmission fails, blocks until the connection is repaired and
 // retries to send the message. Fails if the peer is closed via Close().
 func (p *Peer) Send(m msg.Msg) error {
-	// Only one message can be sent at a time.
-	p.sending.Lock()
-	defer p.sending.Unlock()
-
 	// Repeatedly attempt to send the message.
 	for {
 		// Protect against race with concurrent replaceConn().

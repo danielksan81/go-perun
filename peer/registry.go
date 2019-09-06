@@ -37,7 +37,7 @@ func (r *Registry) find(addr Address) (*Peer, int) {
 		}
 	}
 
-	return nil, 0
+	return nil, -1
 }
 
 // Find looks up the peer via its perun address.
