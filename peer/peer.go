@@ -29,6 +29,7 @@ type Peer struct {
 	replacing sync.Mutex // Protects conn from replaceConn and Close.
 	sending   sync.Mutex // Blocks multiple Send calls.
 	recving   sync.Mutex // Blocks multiple Recv calls.
+	connMutex sync.Mutex // Protect against data race when updating conn.
 
 	closed    chan struct{} // Indicates whether the peer is closed.
 	retrySend chan struct{} // Signals that Send calls can retry. Capacity 1.
@@ -45,7 +46,12 @@ func (p *Peer) recv() msg.Msg {
 
 	// Repeatedly attempt to receive a message.
 	for {
-		if m, err := p.conn.Recv(); err == nil {
+		// Protect against race with concurrent replaceConn().
+		p.connMutex.Lock()
+		conn := p.conn
+		p.connMutex.Unlock()
+
+		if m, err := conn.Recv(); err == nil {
 			return m
 		} else {
 			select {
@@ -83,18 +89,25 @@ func (p *Peer) Send(m msg.Msg) error {
 	defer p.sending.Unlock()
 
 	// Repeatedly attempt to send the message.
-	for p.conn.Send(m) != nil {
-		select {
-		case <-p.closed:
-			// Fail when the peer is closed.
-			return errors.New("connection closed")
-		case <-p.retrySend:
-			// Retry when the connection is repaired.
-			continue
+	for {
+		// Protect against race with concurrent replaceConn().
+		p.connMutex.Lock()
+		conn := p.conn
+		p.connMutex.Unlock()
+
+		if conn.Send(m) != nil {
+			select {
+			case <-p.closed:
+				// Fail when the peer is closed.
+				return errors.New("connection closed")
+			case <-p.retrySend:
+				// Retry when the connection is repaired.
+				continue
+			}
+		} else {
+			return nil
 		}
 	}
-
-	return nil
 }
 
 // replaceConn replaces a peer's connection, if the peer itself is not closed.
@@ -121,7 +134,9 @@ func (p *Peer) replaceConn(conn Conn) bool {
 
 	// Close the old connection to fail all send and receive calls.
 	p.conn.Close()
+	p.connMutex.Lock()
 	p.conn = conn
+	p.connMutex.Unlock()
 
 	// Send the retry signal to both send and recv.
 	p.retrySend <- struct{}{}
