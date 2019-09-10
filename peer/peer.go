@@ -14,22 +14,27 @@ import (
 	"perun.network/go-perun/wire/msg"
 )
 
-// Peer is a Perun peer. It contains the peer's identity, and also represents
-// a communications channel with that peer. Peers must not be created manually.
-// Peers are thread-safe.
+// Peer is an authenticated and self-repairing connection to a Perun peer.
+// It contains the peer's identity.
+// Peers must not be created manually. Peers are thread-safe.
 //
 // If a peer's connection fails, it is automatically repaired as soon as a new
-// connection with the peer is established. This process is hidden.
+// connection with the peer is established. This process is hidden, so the user
+// will not notice when a connection breaks and is repaired again. This
+// simplifies the communication code greatly.
 type Peer struct {
 	PerunAddress Address // The peer's perun address.
 
-	conn     Conn
-	subs     subscriptions
-	registry *Registry
+	conn     Conn          // The peer's connection.
+	subs     subscriptions // The receivers that are subscribed to the peer.
+	registry *Registry     // The registry that holds the peer.
 
-	replacing sync.Mutex // Protects conn from replaceConn and Close.
-	sending   sync.Mutex // Blocks multiple Send calls.
-	connMutex sync.Mutex // Protect against data race when updating conn.
+	// repairing is a chan instead of a mutex because we need to wait for
+	// Lock() in a select statement in repair() together with other cases.
+	repairing chan struct{} // Protects against concurrent repair() calls.
+	replacing sync.Mutex    // Protects conn from replaceConn and Close.
+	sending   sync.Mutex    // Blocks multiple Send calls.
+	connMutex sync.Mutex    // Protect against data race when updating conn.
 
 	closed    chan struct{} // Indicates whether the peer is closed.
 	retrySend chan struct{} // Signals that Send calls can retry. Capacity 1.
@@ -51,14 +56,8 @@ func (p *Peer) recv() (msg.Msg, error) {
 			log.Debugf("failed recv from peer %v\n", p.PerunAddress)
 			return m, nil
 		} else {
-			// Wait until either the peer is closed or repaired.
-			select {
-			case <-p.closed:
-				// Fail when the peer is closed.
-				return nil, errors.WithMessage(err, "peer closed")
-			case <-p.retryRecv:
-				// Retry when the connection is repaired.
-				continue
+			if !p.repair(p.retryRecv) {
+				return nil, errors.WithMessage(err, "peer closed manually")
 			}
 		}
 	}
@@ -90,18 +89,81 @@ func (p *Peer) Send(m msg.Msg) error {
 		conn := p.conn
 		p.connMutex.Unlock()
 
-		if err := conn.Send(m); err != nil {
+		if err := conn.Send(m); err == nil {
+			return nil
+		} else {
 			log.Debugf("failed Send to peer %v", p.PerunAddress)
-			select {
-			case <-p.closed:
-				// Fail when the peer is closed.
-				return errors.Wrap(err, "connection closed")
-			case <-p.retrySend:
-				// Retry when the connection is repaired.
-				continue
+			if !p.repair(p.retrySend) {
+				return errors.WithMessage(err, "peer closed manually")
 			}
 		}
-		return nil
+	}
+}
+
+// repair attempts to repair the peer's connection.
+// It is passed a either retrySend or retryRecv, which are used to detect
+// external repairing of the connection, in which case it reads the signal from
+// the passed channel.
+//
+// repair() blocks until the channel is closed or repaired, and returns true if
+// the channel was successfully repaired, and false otherwise. The function can
+// be called concurrently, but must only be called from within Send() and
+// recv(). Send() must pass retrySend, and recv() must pass retryRecv. When
+// called concurrently, only one instance of the function tries to repair the
+// connection, and the other instance is blocked until the connection is
+// repaired or the peer is closed.
+//
+// Internally, repair() tries to dial a new connection to the peer repeatedly,
+// until dialing succeeds or the connection is replaced externally (through
+// the client's listener, via the registry), or the peer is manually closed.
+func (p *Peer) repair(repaired <-chan struct{}) bool {
+	// Wait until the 'repairing' mutex is locked or the connection is repaired
+	// or the peer is closed.
+	select {
+	case <-repaired: // Success if the peer's connection is already repaired.
+		return true
+	case <-p.closed: // Fail if the peer is closed.
+		return false
+	case p.repairing <- struct{}{}: // Try repairing if the mutex is acquired.
+		// Automatically release the mutex lock again.
+		defer func() { <-p.repairing }()
+
+		// This is used to abort the dialing process.
+		abort := make(chan struct{})
+		// Automatically abort the dialing upon concurrent success/failure.
+		defer close(abort)
+
+		// Continuously retry to repair the connection, until successful or the
+		// peer is closed.
+		for {
+			// This holds the dialled connection (or nil, if failed).
+			dialled := make(chan Conn)
+
+			// Asynchronously dial the peer.
+			// This helper function dials a connection, and returns it over a
+			// channel, if successful, otherwise, closes the 'dialled' channel.
+			go func() {
+				defer close(dialled) // Ensure nil is written on failure.
+				// Dial a connection using the registry's dialer.
+				if conn, err := p.registry.repairer.Dial(p.PerunAddress, abort); err == nil {
+					dialled <- conn
+				}
+			}()
+
+			// Wait for dialing to return, external repair, or closing.
+			select {
+			case <-repaired: // Succeed if the connection was repaired.
+				return true
+			case <-p.closed: // Fail if the peer is closed.
+				return false
+			case conn := <-dialled: // If dialing returned, check for success.
+				if conn != nil {
+					// This also unblocks the other instance of repair().
+					p.replaceConn(conn)
+					return true
+				}
+			}
+		}
 	}
 }
 
@@ -184,6 +246,9 @@ func newPeer(addr Address, conn Conn, registry *Registry) *Peer {
 		conn:     conn,
 		subs:     makeSubscriptions(),
 		registry: registry,
+
+		// Simulated mutex needs capacity 1.
+		repairing: make(chan struct{}, 1),
 
 		closed:    make(chan struct{}),
 		retrySend: make(chan struct{}, 1),

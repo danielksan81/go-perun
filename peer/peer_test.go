@@ -10,32 +10,64 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/pkg/errors"
+
 	"perun.network/go-perun/backend/sim"
 	"perun.network/go-perun/wire/msg"
 )
 
 // Setup is a test setup consisting of two connected peers.
+// It is also a mock dialer.
 type Setup struct {
-	alice *Client
-	bob   *Client
+	closed chan struct{}
+	alice  *Client
+	bob    *Client
 }
 
 // MakeSetup creates a test setup.
-func MakeSetup() Setup {
+func MakeSetup() *Setup {
 	a, b := newPipeConnPair()
 	rng := rand.New(rand.NewSource(0x5D0))
-	return Setup{
-		alice: MakeClient(a, rng),
-		bob:   MakeClient(b, rng),
+	// We need the setup adress when constructing the clients.
+	setup := new(Setup)
+	*setup = Setup{
+		alice: MakeClient(a, rng, setup),
+		bob:   MakeClient(b, rng, setup),
+	}
+
+	return setup
+}
+
+func (s *Setup) Dial(addr Address, abort <-chan struct{}) (Conn, error) {
+	select {
+	case <-s.closed:
+		return nil, errors.New("dialer closed")
+	default:
+	}
+
+	// a: Alice's end, b: Bob's end.
+	a, b := newPipeConnPair()
+
+	if addr.Equals(s.alice.Peer.PerunAddress) { // Dialing Bob?
+		s.bob.Registry.Register(addr, a) // Bob accepts connection.
+		return b, nil
+	} else if addr.Equals(s.bob.Peer.PerunAddress) { // Dialing Alice?
+		s.alice.Registry.Register(addr, b) // Alice accepts connection.
+		return a, nil
+	} else {
+		return nil, errors.New("unknown peer")
 	}
 }
 
-// ReplaceConnections replaces the connections of a test setup's peers.
-func (s *Setup) ReplaceConnections() {
-	a, b := newPipeConnPair()
-
-	s.alice.Peer.replaceConn(a)
-	s.bob.Peer.replaceConn(b)
+func (s *Setup) Close() error {
+	select {
+	case <-s.closed:
+		return errors.New("dialer closed")
+	default:
+		defer recover() // Recover if closing concurrently.
+		close(s.closed)
+		return nil
+	}
 }
 
 // Client is a simulated client in the test setup.
@@ -47,13 +79,13 @@ type Client struct {
 }
 
 // MakeClient creates a simulated test client.
-func MakeClient(conn Conn, rng io.Reader) *Client {
+func MakeClient(conn Conn, rng io.Reader, dialer Dialer) *Client {
 	var receiver = NewReceiver()
 	var registry = NewRegistry(func(p *Peer) {
 		receiver.Subscribe(p, msg.Control)
 		receiver.Subscribe(p, msg.Peer)
 		receiver.Subscribe(p, msg.Channel)
-	})
+	}, dialer)
 
 	return &Client{
 		Peer:     registry.Register(sim.NewRandomAccount(rng).Address(), conn),
@@ -64,7 +96,7 @@ func MakeClient(conn Conn, rng io.Reader) *Client {
 
 // TestConnectionRepair verifies that when sending messages over broken
 // connections, the message is sent as soon as the connection is repaired.
-// Tests both recovery in send as well as in receive.
+// Tests recovery in both send as well as in receive.
 func TestConnectionRepair(t *testing.T) {
 	// Create a setup with two connected nodes.
 	setup := MakeSetup()
@@ -80,9 +112,6 @@ func TestConnectionRepair(t *testing.T) {
 		}
 		close(done)
 	}()
-
-	// Repair the connections.
-	setup.ReplaceConnections()
 
 	// Receive the message.
 	if _, ok := <-setup.bob.Receiver.Next(); !ok {

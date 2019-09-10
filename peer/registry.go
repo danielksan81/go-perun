@@ -14,17 +14,19 @@ import (
 // It should not be used manually, but only internally by the client.
 type Registry struct {
 	mutex sync.RWMutex
-	peers []*Peer
+	peers []*Peer // The list of all of the registry's peers.
 
+	repairer  Dialer      // The repairer is used by peers for repairing.
 	subscribe func(*Peer) // Sets up peer subscriptions.
 }
 
 // NewRegistry creates a new registry.
 // The provided callback is used to set up new peer's subscriptions and it is
 // called before the peer starts receiving messages.
-func NewRegistry(subscribe func(*Peer)) *Registry {
+func NewRegistry(subscribe func(*Peer), repairer Dialer) *Registry {
 	return &Registry{
 		subscribe: subscribe,
+		repairer:  repairer,
 	}
 }
 
@@ -78,14 +80,11 @@ func (r *Registry) delete(peer *Peer) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	for i, p := range r.peers {
-		if p == peer {
-			// Delete the i-th entry.
-			r.peers[i] = r.peers[len(r.peers)-1]
-			r.peers = r.peers[:len(r.peers)-1]
-			return
-		}
+	if _, i := r.find(peer.PerunAddress); i != -1 {
+		// Delete the i-th entry.
+		r.peers[i] = r.peers[len(r.peers)-1]
+		r.peers = r.peers[:len(r.peers)-1]
+	} else {
+		log.Panic("tried to delete non-existent peer!")
 	}
-
-	log.Panic("tried to delete non-existent peer!")
 }
