@@ -10,6 +10,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"perun.network/go-perun/log"
 	"perun.network/go-perun/wire/msg"
 )
 
@@ -38,7 +39,7 @@ type Peer struct {
 // Recv receives a single message from a peer.
 // If the transmission fails, blocks until the connection is repaired and
 // retries to receive the message. Fails if the peer is closed via Close().
-func (p *Peer) recv() msg.Msg {
+func (p *Peer) recv() (msg.Msg, error) {
 	// Repeatedly attempt to receive a message.
 	for {
 		// Protect against race with concurrent replaceConn().
@@ -47,12 +48,14 @@ func (p *Peer) recv() msg.Msg {
 		p.connMutex.Unlock()
 
 		if m, err := conn.Recv(); err == nil {
-			return m
+			log.Debugf("failed recv from peer %v\n", p.PerunAddress)
+			return m, nil
 		} else {
+			// Wait until either the peer is closed or repaired.
 			select {
 			case <-p.closed:
 				// Fail when the peer is closed.
-				return nil
+				return nil, errors.WithMessage(err, "peer closed")
 			case <-p.retryRecv:
 				// Retry when the connection is repaired.
 				continue
@@ -66,7 +69,8 @@ func (p *Peer) recv() msg.Msg {
 // called by the registry when the peer is registered.
 func (p *Peer) recvLoop() {
 	for {
-		if m := p.recv(); m == nil {
+		if m, err := p.recv(); err != nil {
+			log.Debugf("ending recvLoop of closed peer %v", p.PerunAddress)
 			return
 		} else {
 			// Broadcast the received message to all interested subscribers.
@@ -86,18 +90,18 @@ func (p *Peer) Send(m msg.Msg) error {
 		conn := p.conn
 		p.connMutex.Unlock()
 
-		if conn.Send(m) != nil {
+		if err := conn.Send(m); err != nil {
+			log.Debugf("failed Send to peer %v", p.PerunAddress)
 			select {
 			case <-p.closed:
 				// Fail when the peer is closed.
-				return errors.New("connection closed")
+				return errors.Wrap(err, "connection closed")
 			case <-p.retrySend:
 				// Retry when the connection is repaired.
 				continue
 			}
-		} else {
-			return nil
 		}
+		return nil
 	}
 }
 
@@ -132,6 +136,8 @@ func (p *Peer) replaceConn(conn Conn) bool {
 	// Send the retry signal to both send and recv.
 	p.retrySend <- struct{}{}
 	p.retryRecv <- struct{}{}
+
+	log.Debugf("replaced connection for peer %v", p.PerunAddress)
 
 	return true
 }
