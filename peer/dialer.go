@@ -4,12 +4,19 @@
 
 package peer
 
-import (
-	"context"
-)
-
 // Dialer is an interface that allows creating a connection to a peer via its
-// Perun address.
+// Perun address. The established connections have to be authenticated already.
 type Dialer interface {
-	Dial(Address, *context.Context) (*Peer, error)
+	// Dial creates an authenticated connection to a peer.
+	// The passed channel is used to abort the dialing process (via close()).
+	// The returned connection must belong the the requested address.
+	//
+	// Dial needs to be reentrant, and concurrent calls to Close() must abort
+	// any ongoing Dial() calls.
+	Dial(addr Address, abort <-chan struct{}) (Conn, error)
+	// Close aborts any ongoing calls to Dial().
+	//
+	// Close() needs to be reentrant, and repeated calls to Close() need to
+	// return an error.
+	Close() error
 }

@@ -5,11 +5,13 @@
 package peer
 
 import (
+	"github.com/pkg/errors"
+
 	"perun.network/go-perun/wire/msg"
 )
 
 // Conn is a connection to a peer, and can send wire messages.
-// The Send and Recv methods do not have to be re-entrancy-safe, but calls to Close
+// The Send and Recv methods do not have to be reentrant, but calls to Close
 // that happen in other threads must interrupt ongoing Send and Recv calls.
 type Conn interface {
 	// Recv receives a message from the peer.
@@ -18,6 +20,17 @@ type Conn interface {
 	// Send sends a message to the peer.
 	// If an error occurs, the connection must close itself.
 	Send(msg msg.Msg) error
-	// Close closes the connection.
+	// Close closes the connection and aborts any ongoing Send() and Recv()
+	// calls.
+	//
+	// Repeated calls to Close() result in an error.
 	Close() error
+}
+
+// Authenticate runs an authentication protocol on a connection.
+// The protocol exchanges Perun addresses and establishes authenticity.
+//
+// Authenticate() returns the peer's address, if successful, or an error.
+func Authenticate(id Identity, conn Conn) (Address, error) {
+	return nil, errors.New("authentication not implemented")
 }
