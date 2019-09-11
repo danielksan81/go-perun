@@ -33,7 +33,7 @@ type Peer struct {
 	// Lock() in a select statement in repair() together with other cases.
 	repairing chan struct{} // Protects against concurrent repair() calls.
 	replacing sync.Mutex    // Protects conn from replaceConn and Close.
-	sending   sync.Mutex    // Blocks multiple Send calls.
+	sending   chan struct{} // Blocks multiple Send calls.
 	connMutex sync.Mutex    // Protect against data race when updating conn.
 
 	closed    chan struct{} // Indicates whether the peer is closed.
@@ -81,20 +81,50 @@ func (p *Peer) recvLoop() {
 // Send sends a single message to a peer.
 // If the transmission fails, blocks until the connection is repaired and
 // retries to send the message. Fails if the peer is closed via Close().
-func (p *Peer) Send(m msg.Msg) error {
-	// Repeatedly attempt to send the message.
-	for {
-		// Protect against race with concurrent replaceConn().
-		p.connMutex.Lock()
-		conn := p.conn
-		p.connMutex.Unlock()
+//
+// The additional 'abort' channel is used to timeout the send operation.
+// However, the peer's internal connection's Send() call cannot be aborted.
+func (p *Peer) Send(m msg.Msg, abort <-chan struct{}) error {
+	select {
+	case <-p.closed: // Wait for closing of the peer.
+		return errors.New("peer closed")
+	case <-abort: // Wait for manual abort.
+		return errors.New("aborted manually")
+	case p.sending <- struct{}{}: // Wait for sending to be unblocked.
+		// Repeatedly attempt to send the message.
+		for {
+			// Protect against race with concurrent replaceConn().
+			p.connMutex.Lock()
+			conn := p.conn
+			p.connMutex.Unlock()
 
-		if err := conn.Send(m); err == nil {
-			return nil
-		} else {
-			log.Debugf("failed Send to peer %v", p.PerunAddress)
-			if !p.repair(p.retrySend) {
-				return errors.WithMessage(err, "peer closed manually")
+			if err := conn.Send(m); err == nil {
+				// Unlock the mutex.
+				<-p.sending
+				return nil
+			} else {
+				log.Debugf("failed Send to peer %v", p.PerunAddress)
+
+				repair := make(chan bool, 1)
+				// Asynchronously repair the connection.
+				go func() { repair <- p.repair(p.retrySend) }()
+				// Wait for repair to retry, or abort if requested.
+				select {
+				case success := <-repair: // Repairing done?
+					if !success {
+						// Unlock the mutex before failing.
+						<-p.sending
+						return errors.New("peer closed")
+					} else {
+						// Retry sending.
+						continue
+					}
+				case <-abort: // Aborted by the user?
+					// Only release mutex after repair is done. This is needed
+					// as repair() must not be called twice by Send().
+					go func() { <-repair; <-p.sending }()
+					return errors.New("aborted manually")
+				}
 			}
 		}
 	}
@@ -249,6 +279,7 @@ func newPeer(addr Address, conn Conn, registry *Registry) *Peer {
 
 		// Simulated mutex needs capacity 1.
 		repairing: make(chan struct{}, 1),
+		sending:   make(chan struct{}, 1),
 
 		closed:    make(chan struct{}),
 		retrySend: make(chan struct{}, 1),

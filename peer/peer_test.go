@@ -107,7 +107,7 @@ func TestConnectionRepair(t *testing.T) {
 	done := make(chan struct{})
 	// Send the message in the background.
 	go func() {
-		if nil != setup.alice.Peer.Send(msg.NewPingMsg()) {
+		if nil != setup.alice.Peer.Send(msg.NewPingMsg(), nil) {
 			t.Error("Failed to send")
 		}
 		close(done)
