@@ -7,6 +7,8 @@ package peer
 import (
 	"sync"
 
+	"github.com/pkg/errors"
+
 	"perun.network/go-perun/log"
 	"perun.network/go-perun/wire/msg"
 )
@@ -14,13 +16,19 @@ import (
 type subscriptions struct {
 	mutex sync.RWMutex
 	subs  map[msg.Category][]*Receiver
+	peer  *Peer
 }
 
 // add adds a receiver to the subscriptions.
 // If the receiver was already subscribed, panics.
-func (s *subscriptions) add(cat msg.Category, r *Receiver) {
+// If the peer is closed, returns an error.
+func (s *subscriptions) add(cat msg.Category, r *Receiver) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+
+	if s.peer.isClosed() {
+		return errors.New("peer closed")
+	}
 
 	for _, rec := range s.subs[cat] {
 		if rec == r {
@@ -29,6 +37,8 @@ func (s *subscriptions) add(cat msg.Category, r *Receiver) {
 	}
 
 	s.subs[cat] = append(s.subs[cat], r)
+
+	return nil
 }
 
 func (s *subscriptions) delete(cat msg.Category, r *Receiver) {
@@ -44,6 +54,15 @@ func (s *subscriptions) delete(cat msg.Category, r *Receiver) {
 	}
 }
 
+func (s *subscriptions) isEmpty() bool {
+	for _, cat := range s.subs {
+		if len(cat) != 0 {
+			return false
+		}
+	}
+	return true
+}
+
 func (s *subscriptions) put(m msg.Msg, p *Peer) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
@@ -53,7 +72,9 @@ func (s *subscriptions) put(m msg.Msg, p *Peer) {
 	}
 }
 
-func makeSubscriptions() (s subscriptions) {
-	s.subs = make(map[msg.Category][]*Receiver)
-	return
+func makeSubscriptions(p *Peer) subscriptions {
+	return subscriptions{
+		peer: p,
+		subs: make(map[msg.Category][]*Receiver),
+	}
 }

@@ -93,7 +93,7 @@ func (p *Peer) Send(m msg.Msg, abort <-chan struct{}) error {
 	case p.sending <- struct{}{}: // Wait for sending to be unblocked.
 		// Repeatedly attempt to send the message.
 		for {
-			// Protect against race with concurrent replaceConn().
+			// Protect against torn reads from concurrent replaceConn().
 			p.connMutex.Lock()
 			conn := p.conn
 			p.connMutex.Unlock()
@@ -147,6 +147,12 @@ func (p *Peer) Send(m msg.Msg, abort <-chan struct{}) error {
 // until dialing succeeds or the connection is replaced externally (through
 // the client's listener, via the registry), or the peer is manually closed.
 func (p *Peer) repair(repaired <-chan struct{}) bool {
+	// Do not repair as a consequence of the connection being closed in
+	// replaceConn(). Wait until replaceConn() is done, then check whether we
+	// still need to repair anything.
+	p.replacing.Lock()
+	p.replacing.Unlock()
+
 	// Wait until the 'repairing' mutex is locked or the connection is repaired
 	// or the peer is closed.
 	select {
@@ -166,27 +172,38 @@ func (p *Peer) repair(repaired <-chan struct{}) bool {
 		// Continuously retry to repair the connection, until successful or the
 		// peer is closed.
 		for {
-			// This holds the dialled connection (or nil, if failed).
-			dialled := make(chan Conn)
+			// This holds the dialed connection (or nil, if failed).
+			dialed := make(chan Conn, 1)
 
 			// Asynchronously dial the peer.
 			// This helper function dials a connection, and returns it over a
-			// channel, if successful, otherwise, closes the 'dialled' channel.
+			// channel, if successful, otherwise, closes the 'dialed' channel.
 			go func() {
-				defer close(dialled) // Ensure nil is written on failure.
+				defer close(dialed) // Ensure nil is written on failure.
 				// Dial a connection using the registry's dialer.
 				if conn, err := p.registry.repairer.Dial(p.PerunAddress, abort); err == nil {
-					dialled <- conn
+					dialed <- conn
 				}
 			}()
 
 			// Wait for dialing to return, external repair, or closing.
 			select {
 			case <-repaired: // Succeed if the connection was repaired.
+				// Do not let the dialed connection rot.
+				go func() {
+					if conn := <-dialed; conn != nil {
+						p.replaceConn(conn)
+					}
+				}()
 				return true
 			case <-p.closed: // Fail if the peer is closed.
+				go func() {
+					if conn := <-dialed; conn != nil {
+						conn.Close()
+					}
+				}()
 				return false
-			case conn := <-dialled: // If dialing returned, check for success.
+			case conn := <-dialed: // If dialing returned, check for success.
 				if conn != nil {
 					// This also unblocks the other instance of repair().
 					p.replaceConn(conn)
@@ -205,23 +222,17 @@ func (p *Peer) replaceConn(conn Conn) bool {
 	defer p.replacing.Unlock()
 
 	if p.isClosed() {
-		// Abort if the peer is closed.
+		// Abort and close the connection if the peer is closed.
+		conn.Close()
 		return false
 	}
 
-	// Clear the retrySend and retryRecv channels.
-	select {
-	case <-p.retrySend:
-	default:
-	}
-	select {
-	case <-p.retryRecv:
-	default:
-	}
+	clear(p.retrySend)
+	clear(p.retryRecv)
 
 	// Close the old connection to fail all send and receive calls.
 	p.conn.Close()
-	p.connMutex.Lock()
+	p.connMutex.Lock() // Protect against torn reads in recv() and Send().
 	p.conn = conn
 	p.connMutex.Unlock()
 
@@ -232,6 +243,13 @@ func (p *Peer) replaceConn(conn Conn) bool {
 	log.Debugf("replaced connection for peer %v", p.PerunAddress)
 
 	return true
+}
+
+func clear(event chan struct{}) {
+	select {
+	case <-event:
+	default:
+	}
 }
 
 // isClosed checks whether the peer is marked as closed.
@@ -258,23 +276,32 @@ func (p *Peer) Close() error {
 		return errors.New("already closed")
 	}
 
+	// Unregister the peer.
+	p.registry.delete(p)
 	// Mark the peer as closed.
 	close(p.closed)
 	// Close the peer's connection.
 	p.conn.Close()
-	// Unregister the peer.
-	p.registry.delete(p)
+	// Delete this peer from all receivers.
+	p.subs.mutex.Lock()
+	defer p.subs.mutex.Unlock()
+	for cat, recvs := range p.subs.subs {
+		for _, recv := range recvs {
+			recv.unsubscribe(p, cat, false)
+		}
+	}
 
 	return nil
 }
 
 // newPeer creates a new peer from a peer address and connection.
 func newPeer(addr Address, conn Conn, registry *Registry) *Peer {
-	return &Peer{
+	p := new(Peer)
+	*p = Peer{
 		PerunAddress: addr,
 
 		conn:     conn,
-		subs:     makeSubscriptions(),
+		subs:     makeSubscriptions(p),
 		registry: registry,
 
 		// Simulated mutex needs capacity 1.
@@ -285,4 +312,5 @@ func newPeer(addr Address, conn Conn, registry *Registry) *Peer {
 		retrySend: make(chan struct{}, 1),
 		retryRecv: make(chan struct{}, 1),
 	}
+	return p
 }
