@@ -13,7 +13,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 
-	"perun.network/go-perun/backend/sim"
+	"perun.network/go-perun/backend/sim/wallet"
 	"perun.network/go-perun/wire/msg"
 )
 
@@ -89,7 +89,7 @@ func MakeClient(conn Conn, rng io.Reader, dialer Dialer) *Client {
 	}, dialer)
 
 	return &Client{
-		partner:  registry.Register(sim.NewRandomAccount(rng).Address(), conn),
+		partner:  registry.Register(wallet.NewRandomAddress(rng), conn),
 		Registry: registry,
 		Receiver: receiver,
 	}
@@ -121,7 +121,8 @@ func TestConnectionRepair(t *testing.T) {
 }
 
 // TestPeer_Close tests that closing a peer will make the peer object unusable,
-// and that the remote end will try to re-establish the connection.
+// and that the remote end will try to re-establish the connection, and that
+// this results in a new peer object.
 func TestPeer_Close(t *testing.T) {
 	setup := MakeSetup()
 	// Remember bob's address for later, we will need it for a registry lookup.
