@@ -28,9 +28,8 @@ func (c *serializedConn) Send(m msg.Msg) error {
 	if err := msg.Encode(m, c.conn); err != nil {
 		c.conn.Close()
 		return err
-	} else {
-		return nil
 	}
+	return nil
 }
 
 func (c *serializedConn) Recv() (msg.Msg, error) {

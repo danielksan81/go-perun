@@ -91,6 +91,15 @@ func (p *Peer) Send(m msg.Msg, abort <-chan struct{}) error {
 	case <-abort: // Wait for manual abort.
 		return errors.New("aborted manually")
 	case p.sending <- struct{}{}: // Wait for sending to be unblocked.
+		select { // Go randomly selects from available cases.
+		case <-p.closed: // No need to unlock the mutex on closed peers.
+			return errors.New("peer closed")
+		case <-abort:
+			<-p.sending
+			return errors.New("aborted manually")
+		default:
+		}
+
 		// Repeatedly attempt to send the message.
 		for {
 			// Protect against torn reads from concurrent replaceConn().
@@ -164,6 +173,14 @@ func (p *Peer) repair(repaired <-chan struct{}) bool {
 		// Automatically release the mutex lock again.
 		defer func() { <-p.repairing }()
 
+		select { // Go randomly selects from available cases.
+		case <-repaired:
+			return true
+		case <-p.closed:
+			return false
+		default:
+		}
+
 		// This is used to abort the dialing process.
 		abort := make(chan struct{})
 		// Automatically abort the dialing upon concurrent success/failure.
@@ -192,7 +209,12 @@ func (p *Peer) repair(repaired <-chan struct{}) bool {
 				// Do not let the dialed connection rot.
 				go func() {
 					if conn := <-dialed; conn != nil {
-						p.replaceConn(conn)
+						select {
+						case <-p.closed:
+							conn.Close()
+						default:
+							p.replaceConn(conn)
+						}
 					}
 				}()
 				return true

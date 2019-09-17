@@ -9,7 +9,7 @@ package peer
 type Dialer interface {
 	// Dial creates an authenticated connection to a peer.
 	// The passed channel is used to abort the dialing process (via close()).
-	// The returned connection must belong the the requested address.
+	// The returned connection must belong to the requested address.
 	//
 	// Dial needs to be reentrant, and concurrent calls to Close() must abort
 	// any ongoing Dial() calls.
