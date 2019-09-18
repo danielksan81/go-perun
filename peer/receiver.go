@@ -43,7 +43,6 @@ type MsgTuple struct {
 // NextWait() will only fail if the receiver is manually closed via Close().
 type Receiver struct {
 	mutex       sync.Mutex    // Protects all fields.
-	receiving   sync.Mutex    // Only one receive call can run at a time.
 	renewedMsgs chan struct{} // Whether the message channel has been renewed.
 	msgs        chan MsgTuple // Queued messages. Closed when not subscribed.
 	closed      chan struct{}
@@ -62,18 +61,15 @@ func (r *Receiver) Subscribe(p *Peer, c msg.Category) error {
 	default:
 	}
 
-	empty := r.isEmpty()
+	if r.isEmpty() {
+		r.renewChannel()
+	}
 
 	if err := p.subs.add(c, r); err != nil {
 		return err
 	}
 
 	r.subs[c] = append(r.subs[c], p)
-
-	if empty {
-		r.renewChannel()
-	}
-
 	return nil
 }
 
@@ -109,12 +105,11 @@ func (r *Receiver) Unsubscribe(p *Peer, c msg.Category) {
 func (r *Receiver) unsubscribe(p *Peer, c msg.Category, delete bool) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-
-	if delete {
-		p.subs.delete(c, r)
-	}
 	for i, _p := range r.subs[c] {
 		if _p == p {
+			if delete {
+				p.subs.delete(c, r)
+			}
 			r.subs[c][i] = r.subs[c][len(r.subs[c])-1]
 			r.subs[c] = r.subs[c][:len(r.subs[c])-1]
 
@@ -154,20 +149,8 @@ func (r *Receiver) unsubscribeAll() {
 func (r *Receiver) Next() <-chan MsgTuple {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	r.receiving.Lock()
 
-	msgs := r.msgs // Read it while we still have the mutex.
-	next := make(chan MsgTuple, 1)
-	go func() {
-		defer r.receiving.Unlock()
-		if m, ok := <-msgs; !ok {
-			close(next)
-		} else {
-			next <- m
-		}
-	}()
-
-	return next
+	return r.msgs
 }
 
 // NextWait returns a channel that will hold the next received message.
@@ -179,11 +162,9 @@ func (r *Receiver) Next() <-chan MsgTuple {
 func (r *Receiver) NextWait() <-chan MsgTuple {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	r.receiving.Lock()
 
 	next := make(chan MsgTuple, 1)
 	go func() {
-		defer r.receiving.Unlock()
 		for {
 			select {
 			case m, ok := <-r.safelyGetMsgs():
