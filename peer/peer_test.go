@@ -124,12 +124,23 @@ func TestConnectionRepair(t *testing.T) {
 // and that the remote end will try to re-establish the connection, and that
 // this results in a new peer object.
 func TestPeer_Close(t *testing.T) {
+	t.Helper()
+	// Test it often to detect races.
+	for i := 0; i < 1000; i++ {
+		testPeer_Close(t)
+	}
+}
+
+func testPeer_Close(t *testing.T) {
 	setup := MakeSetup()
 	// Remember bob's address for later, we will need it for a registry lookup.
 	bobAddress := setup.alice.partner.PerunAddress
 	// The lookup needs to work because the test relies on it.
-	assert.Equal(t, setup.alice.partner, setup.alice.Registry.Find(bobAddress))
-	setup.alice.partner.Close() // Close Alice's connection to Bob.
+	found, _ := setup.alice.Registry.Find(bobAddress)
+	assert.Equal(t, setup.alice.partner, found)
+	// Close Alice's connection to Bob.
+	assert.Nil(t, setup.alice.partner.Close(), "closing a peer once must succeed")
+	assert.NotNil(t, setup.alice.partner.Close(), "closing peers twice must fail")
 	// Sending over closed peers (not connections) must fail.
 	assert.NotNil(t, setup.alice.partner.Send(msg.NewPingMsg(), nil), "sending to bob must fail")
 	// Sending from the other side must succeed, as the remote will repair the
@@ -143,7 +154,7 @@ func TestPeer_Close(t *testing.T) {
 
 	// Retrieve the new peer connection to bob and check that it is a new
 	// instance (different address) than the old, closed peer.
-	aliceNewPartner := setup.alice.Registry.Find(bobAddress)
+	aliceNewPartner, _ := setup.alice.Registry.Find(bobAddress)
 	// The new peer must not be nil.
 	assert.NotNil(t, aliceNewPartner)
 	// The new peer must not be the old, closed peer.

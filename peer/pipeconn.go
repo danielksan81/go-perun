@@ -6,6 +6,8 @@ package peer
 
 import (
 	"io"
+
+	"github.com/pkg/errors"
 )
 
 // pipeConn is a connection that sends over a local pipe.
@@ -16,8 +18,11 @@ type pipeConn struct {
 }
 
 func (c *pipeConn) Close() error {
-	c.ReadCloser.Close()
-	c.WriteCloser.Close()
+	r := c.ReadCloser.Close()
+	w := c.WriteCloser.Close()
+	if r != nil || w != nil {
+		return errors.Errorf("error closing pipeConn: ReadCloser: %v WriteCloser: %v", r, w)
+	}
 	return nil
 }
 

@@ -122,7 +122,7 @@ func (r *Receiver) unsubscribe(p *Peer, c msg.Category, delete bool) {
 	log.Panic("unsubscribe called on not-subscribed source")
 }
 
-// unsubscribeAll removes all of a receiver's subscriptions.
+// UnsubscribeAll removes all of a receiver's subscriptions.
 func (r *Receiver) UnsubscribeAll() {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -160,9 +160,6 @@ func (r *Receiver) Next() <-chan MsgTuple {
 // The returned channel has to be read. Until the message is read from the
 // returned channel, no new messages can be read from the receiver.
 func (r *Receiver) NextWait() <-chan MsgTuple {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
 	next := make(chan MsgTuple, 1)
 	go func() {
 		for {
@@ -171,14 +168,12 @@ func (r *Receiver) NextWait() <-chan MsgTuple {
 				if ok { // We got a message.
 					next <- m
 					return
-				} else { // We just unsubscribed from all peers.
-					select {
-					case <-r.closed: // The receiver is closed.
-						close(next)
-						return
-					case <-r.renewedMsgs: // We subscribed to something again.
-						continue
-					}
+				}
+				select { // We just unsubscribed from all peers.
+				case <-r.closed: // The receiver is closed.
+					close(next)
+					return
+				case <-r.renewedMsgs: // We subscribed to something again.
 				}
 			case <-r.closed: // Receiver is closed.
 				close(next)
@@ -203,7 +198,7 @@ func (r *Receiver) Close() {
 
 func (r *Receiver) isEmpty() bool {
 	for _, cats := range r.subs {
-		for _ = range cats {
+		if len(cats) != 0 {
 			return false
 		}
 	}
