@@ -7,6 +7,8 @@ package peer
 import (
 	"sync"
 
+	"github.com/pkg/errors"
+
 	"perun.network/go-perun/log"
 )
 
@@ -43,12 +45,14 @@ func (r *Registry) find(addr Address) (*Peer, int) {
 }
 
 // Find looks up the peer via its perun address.
-func (r *Registry) Find(addr Address) *Peer {
+func (r *Registry) Find(addr Address) (*Peer, error) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
-	p, _ := r.find(addr)
-	return p
+	if p, i := r.find(addr); i != -1 {
+		return p, nil
+	}
+	return nil, errors.New("peer not found")
 }
 
 // Register registers a peer in the registry.
