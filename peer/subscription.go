@@ -49,7 +49,9 @@ func (s *subscriptions) delete(cat msg.Category, r *Receiver) {
 	for i, rec := range s.subs[cat] {
 		if rec == r {
 			subs[i] = subs[len(subs)-1]
-			subs = subs[:len(subs)-1]
+			s.subs[cat] = subs[:len(subs)-1]
+
+			return
 		}
 	}
 }
