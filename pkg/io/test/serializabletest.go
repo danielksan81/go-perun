@@ -41,6 +41,7 @@ func genericDecodeEncodeTest(t *testing.T, serializables ...perunio.Serializable
 		go func() {
 			if err := perunio.Encode(w, v); err != nil {
 				t.Errorf("failed to encode %dth element (%T): %+v", i, v, err)
+				w.Close()
 			}
 		}()
 
