@@ -6,29 +6,23 @@ package peer
 
 import (
 	"io"
-
-	"github.com/pkg/errors"
 )
 
 // pipeConn is a connection that sends over a local pipe.
 // It is probably only useful for simpler testing.
 type pipeConn struct {
-	io.ReadCloser
-	io.WriteCloser
+	io.Reader
+	io.Writer
+	io.Closer
 }
 
 func (c *pipeConn) Close() error {
-	r := c.ReadCloser.Close()
-	w := c.WriteCloser.Close()
-	if r != nil || w != nil {
-		return errors.Errorf("error closing pipeConn: ReadCloser: %v WriteCloser: %v", r, w)
-	}
-	return nil
+	return c.Closer.Close()
 }
 
 // newPipeConnPair creates endpoints that are connected via pipes.
 func newPipeConnPair() (a Conn, b Conn) {
 	ra, wa := io.Pipe()
 	rb, wb := io.Pipe()
-	return NewConn(&pipeConn{ra, wb}), NewConn(&pipeConn{rb, wa})
+	return NewConn(&pipeConn{ra, wb, ra}), NewConn(&pipeConn{rb, wa, rb})
 }

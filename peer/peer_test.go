@@ -99,6 +99,8 @@ func MakeClient(conn Conn, rng io.Reader, dialer Dialer) *Client {
 // connections, the message is sent as soon as the connection is repaired.
 // Tests recovery in both send as well as in receive.
 func TestConnectionRepair(t *testing.T) {
+	t.Parallel()
+
 	// Create a setup with two connected nodes.
 	setup := MakeSetup()
 	// Close both connections.
@@ -124,14 +126,23 @@ func TestConnectionRepair(t *testing.T) {
 // and that the remote end will try to re-establish the connection, and that
 // this results in a new peer object.
 func TestPeer_Close(t *testing.T) {
+	t.Parallel()
 	t.Helper()
+
+	N := 1000
+	done := make(chan struct{}, N)
+
 	// Test it often to detect races.
-	for i := 0; i < 1000; i++ {
-		testPeer_Close(t)
+	for i := 0; i < N; i++ {
+		go testPeer_Close(t, done)
+	}
+	// Wait until all tests are done.
+	for i := 0; i < N; i++ {
+		<-done
 	}
 }
 
-func testPeer_Close(t *testing.T) {
+func testPeer_Close(t *testing.T, done chan struct{}) {
 	setup := MakeSetup()
 	// Remember bob's address for later, we will need it for a registry lookup.
 	bobAddress := setup.alice.partner.PerunAddress
@@ -167,4 +178,24 @@ func testPeer_Close(t *testing.T) {
 	assert.Nil(t, aliceNewPartner.Send(msg.NewPingMsg(), nil), "new alice must send to bob")
 	assert.NotNil(t, (<-setup.alice.Receiver.Next()).Msg, "new alice must receive")
 	assert.NotNil(t, (<-setup.bob.Receiver.Next()).Msg, "bob must receive")
+
+	done <- struct{}{}
+}
+
+func TestPeer_Send_ImmediateAbort(t *testing.T) {
+	setup := MakeSetup()
+
+	abort := make(chan struct{})
+	close(abort)
+
+	// Test often to cover all select branches (random).
+	for i := 0; i < 256; i++ {
+		// This operation should abort immediately.
+		assert.Error(t, setup.alice.partner.Send(msg.NewPingMsg(), abort))
+	}
+
+	assert.NoError(t, setup.alice.partner.Send(msg.NewPongMsg(), nil))
+
+	// The second message must be received first.
+	assert.NotNil(t, (<-setup.bob.Receiver.Next()).Msg.(*msg.PongMsg))
 }
