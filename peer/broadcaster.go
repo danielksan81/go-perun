@@ -39,6 +39,7 @@ func (b *Broadcaster) Send(m msg.Msg, abort chan struct{}) *BroadcastError {
 
 	// Gather results and collect errors.
 	var error BroadcastError
+	error.errors = make([]sendError, 0)
 	for _, _ = range b.peers {
 		err := <-b.gather
 		if err.err != nil {
@@ -57,6 +58,8 @@ type sendError struct {
 	index int
 	err   error
 }
+
+var _ error = &BroadcastError{}
 
 // BroadcastError is a collection of errors that occurred during a broadcast
 // operation.

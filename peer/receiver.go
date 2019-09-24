@@ -61,15 +61,17 @@ func (r *Receiver) Subscribe(p *Peer, c msg.Category) error {
 	default:
 	}
 
-	if r.isEmpty() {
-		r.renewChannel()
-	}
+	empty := r.isEmpty()
 
 	if err := p.subs.add(c, r); err != nil {
 		return err
 	}
 
 	r.subs[c] = append(r.subs[c], p)
+
+	if empty {
+		r.renewChannel()
+	}
 	return nil
 }
 
@@ -130,14 +132,17 @@ func (r *Receiver) UnsubscribeAll() {
 }
 
 func (r *Receiver) unsubscribeAll() {
+	empty := r.isEmpty()
+
 	for cat, subs := range r.subs {
 		for _, p := range subs {
 			p.subs.delete(cat, r)
 		}
 		r.subs[cat] = nil
 	}
-
-	close(r.msgs)
+	if !empty {
+		close(r.msgs)
+	}
 }
 
 // Next returns a channel to the next message.
