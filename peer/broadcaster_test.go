@@ -33,8 +33,7 @@ func TestBroadcaster_Send(t *testing.T) {
 
 	b := NewBroadcaster(sendPeers)
 
-	var err error = b.Send(msg.NewPingMsg(), nil)
-	assert.NoError(t, err, "broadcast must succeed")
+	assert.Nil(t, b.Send(msg.NewPingMsg(), nil), "broadcast must succeed")
 }
 
 func TestBroadcaster_Send_Error(t *testing.T) {
@@ -61,6 +60,7 @@ func TestBroadcaster_Send_Error(t *testing.T) {
 	assert.Error(t, err, "broadcast must fail")
 	assert.Equal(t, len(err.errors), 1)
 	assert.Equal(t, err.errors[0].index, 1)
+	assert.Equal(t, err.Error(), "failed to send message:\npeer[1]: "+err.errors[0].err.Error())
 }
 
 func TestNewBroadcaster(t *testing.T) {
