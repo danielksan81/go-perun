@@ -25,9 +25,8 @@ import (
 type Peer struct {
 	PerunAddress Address // The peer's perun address.
 
-	conn     Conn          // The peer's connection.
-	subs     subscriptions // The receivers that are subscribed to the peer.
-	registry *Registry     // The registry that holds the peer.
+	conn Conn          // The peer's connection.
+	subs subscriptions // The receivers that are subscribed to the peer.
 
 	// repairing is a chan instead of a mutex because we need to wait for
 	// Lock() in a select statement in repair() together with other cases.
@@ -39,6 +38,9 @@ type Peer struct {
 	closed    chan struct{} // Indicates whether the peer is closed.
 	retrySend chan struct{} // Signals that Send calls can retry. Capacity 1.
 	retryRecv chan struct{} // Signals that Recv calls can retry. Capacity 1.
+
+	closeWork func(*Peer) // Work to be done when the peer is closed.
+	repairer  Dialer      // The dialer that is used to repair the connection.
 }
 
 // Recv receives a single message from a peer.
@@ -198,7 +200,7 @@ func (p *Peer) repair(repaired <-chan struct{}) bool {
 			go func() {
 				defer close(dialed) // Ensure nil is written on failure.
 				// Dial a connection using the registry's dialer.
-				if conn, err := p.registry.repairer.Dial(p.PerunAddress, abort); err == nil {
+				if conn, err := p.repairer.Dial(p.PerunAddress, abort); err == nil {
 					dialed <- conn
 				}
 			}()
@@ -299,7 +301,7 @@ func (p *Peer) Close() error {
 	}
 
 	// Unregister the peer.
-	p.registry.delete(p)
+	p.closeWork(p)
 	// Mark the peer as closed.
 	close(p.closed)
 	// Close the peer's connection.
@@ -317,14 +319,18 @@ func (p *Peer) Close() error {
 }
 
 // newPeer creates a new peer from a peer address and connection.
-func newPeer(addr Address, conn Conn, registry *Registry) *Peer {
+func newPeer(addr Address, conn Conn, closeWork func(*Peer), repairer Dialer) *Peer {
+	// In tests, it is useful to omit the function.
+	if closeWork == nil {
+		closeWork = func(*Peer) {}
+	}
+
 	p := new(Peer)
 	*p = Peer{
 		PerunAddress: addr,
 
-		conn:     conn,
-		subs:     makeSubscriptions(p),
-		registry: registry,
+		conn: conn,
+		subs: makeSubscriptions(p),
 
 		// Simulated mutex needs capacity 1.
 		repairing: make(chan struct{}, 1),
@@ -333,6 +339,9 @@ func newPeer(addr Address, conn Conn, registry *Registry) *Peer {
 		closed:    make(chan struct{}),
 		retrySend: make(chan struct{}, 1),
 		retryRecv: make(chan struct{}, 1),
+
+		closeWork: closeWork,
+		repairer:  repairer,
 	}
 	return p
 }

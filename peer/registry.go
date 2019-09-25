@@ -65,7 +65,7 @@ func (r *Registry) Register(addr Address, conn Conn) (peer *Peer) {
 
 	if peer, _ = r.find(addr); peer == nil {
 		// Create and register a new peer.
-		peer = newPeer(addr, conn, r)
+		peer = newPeer(addr, conn, func(p *Peer) { r.delete(p) }, r.repairer)
 		r.peers = append(r.peers, peer)
 		// Setup the peer's subscriptions.
 		r.subscribe(peer)
