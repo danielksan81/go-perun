@@ -24,7 +24,7 @@ func TestReceiver_Subscribe(t *testing.T) {
 	t.Parallel()
 
 	r := NewReceiver()
-	p := newPeer(nil, nil, nil)
+	p := newPeer(nil, nil, nil, nil)
 
 	assert.True(t, r.isEmpty(), "receiver must be empty")
 	assert.NoError(t, r.Subscribe(p, msg.Control), "first subscribe must not fail")
@@ -48,7 +48,7 @@ func TestReceiver_Next(t *testing.T) {
 	t.Parallel()
 
 	in, out := newPipeConnPair()
-	p := newPeer(nil, in, nil)
+	p := newPeer(nil, in, nil, nil)
 	go p.recvLoop()
 	r := NewReceiver()
 
@@ -133,7 +133,7 @@ func TestReceiver_NextWait(t *testing.T) {
 
 	in, out := newPipeConnPair()
 
-	p := newPeer(nil, in, nil)
+	p := newPeer(nil, in, nil, nil)
 	go p.recvLoop()
 	r := NewReceiver()
 
@@ -186,7 +186,7 @@ func TestReceiver_NextWait_ClosedRace(t *testing.T) {
 	for i := 0; i < 256; i++ {
 		in, _ := newPipeConnPair()
 
-		p := newPeer(nil, in, nil)
+		p := newPeer(nil, in, nil, nil)
 		go p.recvLoop()
 		r := NewReceiver()
 
@@ -209,7 +209,7 @@ func TestReceiver_renewChannel_transfer(t *testing.T) {
 
 	in, out := newPipeConnPair()
 
-	p := newPeer(nil, in, nil)
+	p := newPeer(nil, in, nil, nil)
 	go p.recvLoop()
 	r := NewReceiver()
 	r.Subscribe(p, msg.Control)

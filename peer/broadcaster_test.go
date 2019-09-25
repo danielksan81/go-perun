@@ -25,8 +25,8 @@ func TestBroadcaster_Send(t *testing.T) {
 	r := NewReceiver()
 	for i := 0; i < N; i++ {
 		in, out := newPipeConnPair()
-		sendPeers[i] = newPeer(nil, out, nil)
-		recvPeers[i] = newPeer(nil, in, nil)
+		sendPeers[i] = newPeer(nil, out, nil, nil)
+		recvPeers[i] = newPeer(nil, in, nil, nil)
 		r.Subscribe(recvPeers[i], msg.Control)
 		go recvPeers[i].recvLoop()
 	}
@@ -47,7 +47,7 @@ func TestBroadcaster_Send_Error(t *testing.T) {
 	for i := 0; i < N; i++ {
 		in, out := newPipeConnPair()
 		sendPeers[i] = reg.Register(wallet.NewRandomAddress(rng), out)
-		recvPeers[i] = newPeer(nil, in, reg)
+		recvPeers[i] = newPeer(nil, in, nil, nil)
 		r.Subscribe(recvPeers[i], msg.Control)
 		go recvPeers[i].recvLoop()
 	}
@@ -64,7 +64,7 @@ func TestBroadcaster_Send_Error(t *testing.T) {
 }
 
 func TestNewBroadcaster(t *testing.T) {
-	peers := []*Peer{newPeer(nil, nil, nil), newPeer(nil, nil, nil)}
+	peers := []*Peer{newPeer(nil, nil, nil, nil), newPeer(nil, nil, nil, nil)}
 
 	b := NewBroadcaster(peers)
 	assert.Equal(t, peers, b.peers)
