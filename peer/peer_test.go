@@ -199,3 +199,18 @@ func TestPeer_Send_ImmediateAbort(t *testing.T) {
 	// The second message must be received first.
 	assert.NotNil(t, (<-setup.bob.Receiver.Next()).Msg.(*msg.PongMsg))
 }
+
+func TestPeer_isClosed(t *testing.T) {
+	setup := MakeSetup()
+	assert.False(t, setup.alice.partner.isClosed(), "fresh peer must be open")
+	assert.NoError(t, setup.alice.partner.Close(), "closing must succeed")
+	assert.True(t, setup.alice.partner.isClosed(), "closed peer must be closed")
+}
+
+func TestPeer_ReplaceConn_Closed(t *testing.T) {
+	setup := MakeSetup()
+
+	setup.alice.partner.Close()
+	conn, _ := newPipeConnPair()
+	assert.False(t, setup.alice.partner.replaceConn(conn), "replacing on closed peer must fail")
+}
