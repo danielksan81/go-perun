@@ -13,6 +13,10 @@ import (
 	"perun.network/go-perun/wire/msg"
 )
 
+// Timeout controls how long to wait until we decide that something will never
+// happen.
+const Timeout = 750 * time.Millisecond
+
 func TestNewReceiver(t *testing.T) {
 	t.Parallel()
 
@@ -77,7 +81,7 @@ func TestReceiver_Next(t *testing.T) {
 	out.Send(msg.NewPingMsg())
 
 	// Ensure that the peer received the message.
-	<-time.NewTimer(100 * time.Millisecond).C
+	<-time.NewTimer(Timeout).C
 
 	r.Subscribe(p, msg.Control)
 	// Get a new Next() channel.
@@ -90,7 +94,7 @@ func TestReceiver_Next(t *testing.T) {
 		} else {
 			t.Fatal("subscribed receivers must not close the NextWait() channel")
 		}
-	case <-time.NewTimer(100 * time.Millisecond).C:
+	case <-time.NewTimer(Timeout).C:
 	}
 
 	out.Send(msg.NewPongMsg())
@@ -103,27 +107,27 @@ func TestReceiver_Next(t *testing.T) {
 		} else {
 			t.Fatal("subscribed receivers must not close the NextWait() channel")
 		}
-	case <-time.NewTimer(100 * time.Millisecond).C:
+	case <-time.NewTimer(Timeout).C:
 		t.Fatal("failed to receive message")
 	}
 
 	// This will trigger in the middle of the next test.
 	go func() {
-		<-time.NewTimer(50 * time.Millisecond).C
+		<-time.NewTimer(Timeout).C
 		r.Close()
 	}()
 
 	select {
 	case _, ok := <-r.NextWait():
 		assert.False(t, ok, "NextWait() must be closed")
-	case <-time.NewTimer(100 * time.Millisecond).C:
+	case <-time.NewTimer(Timeout * 2).C:
 		t.Fatal("NextWait() was not closed in time")
 	}
 
 	select {
 	case _, ok := <-r.Next():
 		assert.False(t, ok, "Next() must be closed")
-	case <-time.NewTimer(200 * time.Millisecond).C:
+	case <-time.NewTimer(Timeout * 2).C:
 		t.Fatal("Next() was not closed in time")
 	}
 }
@@ -148,7 +152,7 @@ func TestReceiver_NextWait(t *testing.T) {
 		} else {
 			t.Fatal("unsubscribed fresh receivers must not close the NextWait() channel")
 		}
-	case <-time.NewTimer(100 * time.Millisecond).C:
+	case <-time.NewTimer(Timeout).C:
 	}
 
 	r.Subscribe(p, msg.Control)
@@ -160,7 +164,7 @@ func TestReceiver_NextWait(t *testing.T) {
 		} else {
 			t.Fatal("subscribed receivers must not close the NextWait() channel")
 		}
-	case <-time.NewTimer(100 * time.Millisecond).C:
+	case <-time.NewTimer(Timeout).C:
 	}
 
 	out.Send(msg.NewPongMsg())
@@ -173,7 +177,7 @@ func TestReceiver_NextWait(t *testing.T) {
 		} else {
 			t.Fatal("subscribed receivers must not close the NextWait() channel")
 		}
-	case <-time.NewTimer(100 * time.Millisecond).C:
+	case <-time.NewTimer(Timeout).C:
 		t.Fatal("failed to receive message")
 	}
 }
@@ -196,7 +200,7 @@ func TestReceiver_NextWait_ClosedRace(t *testing.T) {
 		select {
 		case _, ok := <-next:
 			assert.False(t, ok, "message channel must be closed")
-		case <-time.NewTimer(100 * time.Millisecond).C:
+		case <-time.NewTimer(Timeout).C:
 			t.Fatal("did not close the message channel.")
 		}
 	}
@@ -215,7 +219,7 @@ func TestReceiver_renewChannel_transfer(t *testing.T) {
 	r.Subscribe(p, msg.Control)
 
 	out.Send(msg.NewPingMsg())
-	<-time.NewTimer(100 * time.Millisecond).C
+	<-time.NewTimer(Timeout).C
 
 	r.UnsubscribeAll()
 	assert.True(t, r.isEmpty(), "receiver must be empty")
@@ -225,7 +229,7 @@ func TestReceiver_renewChannel_transfer(t *testing.T) {
 	select {
 	case _, ok := <-r.Next():
 		assert.True(t, ok, "message channel must contain the first message")
-	case <-time.NewTimer(100 * time.Millisecond).C:
+	case <-time.NewTimer(Timeout).C:
 		t.Fatal("did not contain the message.")
 	}
 }
