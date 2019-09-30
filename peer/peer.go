@@ -6,6 +6,7 @@
 package peer // import "perun.network/go-perun/peer"
 
 import (
+	"context"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -86,17 +87,17 @@ func (p *Peer) recvLoop() {
 //
 // The additional 'abort' channel is used to timeout the send operation.
 // However, the peer's internal connection's Send() call cannot be aborted.
-func (p *Peer) Send(m msg.Msg, abort <-chan struct{}) error {
+func (p *Peer) Send(ctx context.Context, m msg.Msg) error {
 	select {
 	case <-p.closed: // Wait for closing of the peer.
 		return errors.New("peer closed")
-	case <-abort: // Wait for manual abort.
+	case <-ctx.Done(): // Wait for manual abort.
 		return errors.New("aborted manually")
 	case p.sending <- struct{}{}: // Wait for sending to be unblocked.
 		select { // Go randomly selects from available cases.
 		case <-p.closed: // No need to unlock the mutex on closed peers.
 			return errors.New("peer closed")
-		case <-abort:
+		case <-ctx.Done():
 			<-p.sending
 			return errors.New("aborted manually")
 		default:
@@ -130,7 +131,7 @@ func (p *Peer) Send(m msg.Msg, abort <-chan struct{}) error {
 						// Retry sending.
 						continue
 					}
-				case <-abort: // Aborted by the user?
+				case <-ctx.Done(): // Aborted by the user?
 					// Only release mutex after repair is done. This is needed
 					// as repair() must not be called twice by Send().
 					go func() { <-repair; <-p.sending }()
@@ -184,9 +185,9 @@ func (p *Peer) repair(repaired <-chan struct{}) bool {
 		}
 
 		// This is used to abort the dialing process.
-		abort := make(chan struct{})
+		dialctx, dialcancel := context.WithCancel(context.Background())
 		// Automatically abort the dialing upon concurrent success/failure.
-		defer close(abort)
+		defer dialcancel()
 
 		// Continuously retry to repair the connection, until successful or the
 		// peer is closed.
@@ -200,7 +201,7 @@ func (p *Peer) repair(repaired <-chan struct{}) bool {
 			go func() {
 				defer close(dialed) // Ensure nil is written on failure.
 				// Dial a connection using the registry's dialer.
-				if conn, err := p.repairer.Dial(p.PerunAddress, abort); err == nil {
+				if conn, err := p.repairer.Dial(dialctx, p.PerunAddress); err == nil {
 					dialed <- conn
 				}
 			}()

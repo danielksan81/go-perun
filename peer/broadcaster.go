@@ -5,6 +5,7 @@
 package peer
 
 import (
+	"context"
 	"strconv"
 
 	"perun.network/go-perun/wire/msg"
@@ -26,14 +27,14 @@ type Broadcaster struct {
 // The returned error is nil if the message was successfully sent to all peers.
 // Otherwise, the returned error contains an array of all individual errors
 // that occurred.
-func (b *Broadcaster) Send(m msg.Msg, abort chan struct{}) *BroadcastError {
+func (b *Broadcaster) Send(ctx context.Context, m msg.Msg) *BroadcastError {
 	// Send all messages in parallel.
 	for i, p := range b.peers {
 		go func(i int, p *Peer, m msg.Msg) {
 			err := sendError{index: i}
 			defer func() { b.gather <- err }()
 
-			err.err = p.Send(m, abort)
+			err.err = p.Send(ctx, m)
 		}(i, p, m)
 	}
 

@@ -5,6 +5,7 @@
 package peer
 
 import (
+	"context"
 	"math/rand"
 	"testing"
 
@@ -33,7 +34,7 @@ func TestBroadcaster_Send(t *testing.T) {
 
 	b := NewBroadcaster(sendPeers)
 
-	assert.Nil(t, b.Send(msg.NewPingMsg(), nil), "broadcast must succeed")
+	assert.Nil(t, b.Send(context.Background(), msg.NewPingMsg()), "broadcast must succeed")
 }
 
 func TestBroadcaster_Send_Error(t *testing.T) {
@@ -56,7 +57,7 @@ func TestBroadcaster_Send_Error(t *testing.T) {
 
 	b := NewBroadcaster(sendPeers)
 
-	err := b.Send(msg.NewPingMsg(), nil)
+	err := b.Send(context.Background(), msg.NewPingMsg())
 	assert.Error(t, err, "broadcast must fail")
 	assert.Equal(t, len(err.errors), 1)
 	assert.Equal(t, err.errors[0].index, 1)
