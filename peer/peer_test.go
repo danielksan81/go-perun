@@ -6,6 +6,7 @@
 package peer
 
 import (
+	"context"
 	"io"
 	"math/rand"
 	"testing"
@@ -39,7 +40,7 @@ func MakeSetup() *Setup {
 }
 
 // Dial simulates creating a connection to a peer.
-func (s *Setup) Dial(addr Address, abort <-chan struct{}) (Conn, error) {
+func (s *Setup) Dial(ctx context.Context, addr Address) (Conn, error) {
 	select {
 	case <-s.closed:
 		return nil, errors.New("dialer closed")
@@ -110,7 +111,7 @@ func TestConnectionRepair(t *testing.T) {
 	done := make(chan struct{})
 	// Send the message in the background.
 	go func() {
-		assert.Nil(t, setup.alice.partner.Send(msg.NewPingMsg(), nil), "failed to send")
+		assert.Nil(t, setup.alice.partner.Send(context.Background(), msg.NewPingMsg()), "failed to send")
 		close(done)
 	}()
 
@@ -153,10 +154,10 @@ func testPeer_Close(t *testing.T, done chan struct{}) {
 	assert.Nil(t, setup.alice.partner.Close(), "closing a peer once must succeed")
 	assert.NotNil(t, setup.alice.partner.Close(), "closing peers twice must fail")
 	// Sending over closed peers (not connections) must fail.
-	assert.NotNil(t, setup.alice.partner.Send(msg.NewPingMsg(), nil), "sending to bob must fail")
+	assert.NotNil(t, setup.alice.partner.Send(context.Background(), msg.NewPingMsg()), "sending to bob must fail")
 	// Sending from the other side must succeed, as the remote will repair the
 	// peer connection.
-	assert.Nil(t, setup.bob.partner.Send(msg.NewPingMsg(), nil), "sending to alice must succeed (new socket)")
+	assert.Nil(t, setup.bob.partner.Send(context.Background(), msg.NewPingMsg()), "sending to alice must succeed (new socket)")
 	// The receiver is subscribed automatically because it is registered in the
 	// registry (see MakeClient()).
 	assert.NotNil(t, (<-setup.alice.Receiver.Next()).Msg, "new alice must receive")
@@ -174,8 +175,8 @@ func testPeer_Close(t *testing.T, done chan struct{}) {
 		"Alice needs to have been replaced")
 
 	// Check that the new peer can communicate in both directions.
-	assert.Nil(t, setup.bob.partner.Send(msg.NewPongMsg(), nil), "Sending to new Alice")
-	assert.Nil(t, aliceNewPartner.Send(msg.NewPingMsg(), nil), "new alice must send to bob")
+	assert.Nil(t, setup.bob.partner.Send(context.Background(), msg.NewPongMsg()), "Sending to new Alice")
+	assert.Nil(t, aliceNewPartner.Send(context.Background(), msg.NewPingMsg()), "new alice must send to bob")
 	assert.NotNil(t, (<-setup.alice.Receiver.Next()).Msg, "new alice must receive")
 	assert.NotNil(t, (<-setup.bob.Receiver.Next()).Msg, "bob must receive")
 
@@ -185,16 +186,16 @@ func testPeer_Close(t *testing.T, done chan struct{}) {
 func TestPeer_Send_ImmediateAbort(t *testing.T) {
 	setup := MakeSetup()
 
-	abort := make(chan struct{})
-	close(abort)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
 
 	// Test often to cover all select branches (random).
 	for i := 0; i < 256; i++ {
 		// This operation should abort immediately.
-		assert.Error(t, setup.alice.partner.Send(msg.NewPingMsg(), abort))
+		assert.Error(t, setup.alice.partner.Send(ctx, msg.NewPingMsg()))
 	}
 
-	assert.NoError(t, setup.alice.partner.Send(msg.NewPongMsg(), nil))
+	assert.NoError(t, setup.alice.partner.Send(context.Background(), msg.NewPongMsg()))
 
 	// The second message must be received first.
 	assert.NotNil(t, (<-setup.bob.Receiver.Next()).Msg.(*msg.PongMsg))
