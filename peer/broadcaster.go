@@ -23,25 +23,25 @@ type Broadcaster struct {
 // function returns an error if the message could not be delivered to any of
 // the broadcaster's recipients.
 //
-// The 'abort' channel can be used to manually abort the broadcast.
+// The context can be used to manually abort the broadcast.
 // The returned error is nil if the message was successfully sent to all peers.
 // Otherwise, the returned error contains an array of all individual errors
 // that occurred.
 func (b *Broadcaster) Send(ctx context.Context, m msg.Msg) *BroadcastError {
 	// Send all messages in parallel.
 	for i, p := range b.peers {
-		go func(i int, p *Peer, m msg.Msg) {
-			err := sendError{index: i}
-			defer func() { b.gather <- err }()
-
-			err.err = p.Send(ctx, m)
-		}(i, p, m)
+		go func(i int, p *Peer) {
+			b.gather <- sendError{
+				index: i,
+				err:   p.Send(ctx, m),
+			}
+		}(i, p)
 	}
 
 	// Gather results and collect errors.
 	var error BroadcastError
 	error.errors = make([]sendError, 0)
-	for _, _ = range b.peers {
+	for range b.peers {
 		err := <-b.gather
 		if err.err != nil {
 			error.errors = append(error.errors, err)
