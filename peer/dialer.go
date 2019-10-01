@@ -12,8 +12,8 @@ import (
 // Perun address. The established connections have to be authenticated already.
 type Dialer interface {
 	// Dial creates an authenticated connection to a peer.
-	// The passed channel is used to abort the dialing process (via close()).
-	// The returned connection must belong to the requested address.
+	// The passed context is used to abort the dialing process. The returned
+	// connection must belong to the requested address.
 	//
 	// Dial needs to be reentrant, and concurrent calls to Close() must abort
 	// any ongoing Dial() calls.

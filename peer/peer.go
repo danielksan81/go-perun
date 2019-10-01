@@ -16,8 +16,14 @@ import (
 )
 
 // Peer is an authenticated and self-repairing connection to a Perun peer.
-// It contains the peer's identity.
-// Peers must not be created manually. Peers are thread-safe.
+// It contains the peer's identity. Peers are thread-safe.
+// Peers must not be created manually. The creation of peers is handled by the
+// Registry, which tracks all existing peers. The registry, in turn, is used by
+// the Client.
+//
+// Sending messages to a peer is done via the Send() method, or via the
+// Broadcaster helper type. Receiving messages can only be done via the
+// Receiver helper type (by subscribing).
 //
 // If a peer's connection fails, it is automatically repaired as soon as a new
 // connection with the peer is established. This process is hidden, so the user
@@ -44,7 +50,7 @@ type Peer struct {
 	repairer  Dialer      // The dialer that is used to repair the connection.
 }
 
-// Recv receives a single message from a peer.
+// recv receives a single message from a peer.
 // If the transmission fails, blocks until the connection is repaired and
 // retries to receive the message. Fails if the peer is closed via Close().
 func (p *Peer) recv() (msg.Msg, error) {
@@ -85,7 +91,7 @@ func (p *Peer) recvLoop() {
 // If the transmission fails, blocks until the connection is repaired and
 // retries to send the message. Fails if the peer is closed via Close().
 //
-// The additional 'abort' channel is used to timeout the send operation.
+// The passed context is used to timeout the send operation.
 // However, the peer's internal connection's Send() call cannot be aborted.
 func (p *Peer) Send(ctx context.Context, m msg.Msg) error {
 	select {
@@ -270,7 +276,8 @@ func (p *Peer) replaceConn(conn Conn) bool {
 	return true
 }
 
-func clear(event chan struct{}) {
+// clear empties an event channel's unread events.
+func clear(event <-chan struct{}) {
 	select {
 	case <-event:
 	default:
