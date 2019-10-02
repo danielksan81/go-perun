@@ -7,7 +7,7 @@ package peer
 import (
 	"github.com/pkg/errors"
 
-	"perun.network/go-perun/wire/msg"
+	wire "perun.network/go-perun/wire/msg"
 )
 
 // Conn is a connection to a peer, and can send wire messages.
@@ -17,10 +17,10 @@ import (
 type Conn interface {
 	// Recv receives a message from the peer.
 	// If an error occurs, the connection must close itself.
-	Recv() (msg.Msg, error)
+	Recv() (wire.Msg, error)
 	// Send sends a message to the peer.
 	// If an error occurs, the connection must close itself.
-	Send(msg msg.Msg) error
+	Send(msg wire.Msg) error
 	// Close closes the connection and aborts any ongoing Send() and Recv()
 	// calls.
 	//

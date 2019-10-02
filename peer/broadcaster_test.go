@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"perun.network/go-perun/backend/sim/wallet"
-	"perun.network/go-perun/wire/msg"
+	wire "perun.network/go-perun/wire/msg"
 )
 
 var rng = rand.New(rand.NewSource(0xb0baFEDD))
@@ -28,13 +28,13 @@ func TestBroadcaster_Send(t *testing.T) {
 		in, out := newPipeConnPair()
 		sendPeers[i] = newPeer(nil, out, nil, nil)
 		recvPeers[i] = newPeer(nil, in, nil, nil)
-		r.Subscribe(recvPeers[i], msg.Control)
+		r.Subscribe(recvPeers[i], wire.Control)
 		go recvPeers[i].recvLoop()
 	}
 
 	b := NewBroadcaster(sendPeers)
 
-	assert.Nil(t, b.Send(context.Background(), msg.NewPingMsg()), "broadcast must succeed")
+	assert.Nil(t, b.Send(context.Background(), wire.NewPingMsg()), "broadcast must succeed")
 }
 
 func TestBroadcaster_Send_Error(t *testing.T) {
@@ -49,7 +49,7 @@ func TestBroadcaster_Send_Error(t *testing.T) {
 		in, out := newPipeConnPair()
 		sendPeers[i] = reg.Register(wallet.NewRandomAddress(rng), out)
 		recvPeers[i] = newPeer(nil, in, nil, nil)
-		r.Subscribe(recvPeers[i], msg.Control)
+		r.Subscribe(recvPeers[i], wire.Control)
 		go recvPeers[i].recvLoop()
 	}
 
@@ -57,7 +57,7 @@ func TestBroadcaster_Send_Error(t *testing.T) {
 
 	b := NewBroadcaster(sendPeers)
 
-	err := b.Send(context.Background(), msg.NewPingMsg())
+	err := b.Send(context.Background(), wire.NewPingMsg())
 	assert.Error(t, err, "broadcast must fail")
 	assert.Equal(t, len(err.errors), 1)
 	assert.Equal(t, err.errors[0].index, 1)

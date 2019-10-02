@@ -10,19 +10,19 @@ import (
 	"github.com/pkg/errors"
 
 	"perun.network/go-perun/log"
-	"perun.network/go-perun/wire/msg"
+	wire "perun.network/go-perun/wire/msg"
 )
 
 type subscriptions struct {
 	mutex sync.RWMutex
-	subs  map[msg.Category][]*Receiver
+	subs  map[wire.Category][]*Receiver
 	peer  *Peer
 }
 
 // add adds a receiver to the subscriptions.
 // If the receiver was already subscribed, panics.
 // If the peer is closed, returns an error.
-func (s *subscriptions) add(cat msg.Category, r *Receiver) error {
+func (s *subscriptions) add(cat wire.Category, r *Receiver) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -41,7 +41,7 @@ func (s *subscriptions) add(cat msg.Category, r *Receiver) error {
 	return nil
 }
 
-func (s *subscriptions) delete(cat msg.Category, r *Receiver) {
+func (s *subscriptions) delete(cat wire.Category, r *Receiver) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -65,7 +65,7 @@ func (s *subscriptions) isEmpty() bool {
 	return true
 }
 
-func (s *subscriptions) put(m msg.Msg, p *Peer) {
+func (s *subscriptions) put(m wire.Msg, p *Peer) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -77,6 +77,6 @@ func (s *subscriptions) put(m msg.Msg, p *Peer) {
 func makeSubscriptions(p *Peer) subscriptions {
 	return subscriptions{
 		peer: p,
-		subs: make(map[msg.Category][]*Receiver),
+		subs: make(map[wire.Category][]*Receiver),
 	}
 }

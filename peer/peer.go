@@ -12,7 +12,7 @@ import (
 	"github.com/pkg/errors"
 
 	"perun.network/go-perun/log"
-	"perun.network/go-perun/wire/msg"
+	wire "perun.network/go-perun/wire/msg"
 )
 
 // Peer is an authenticated and self-repairing connection to a Perun peer.
@@ -53,7 +53,7 @@ type Peer struct {
 // recv receives a single message from a peer.
 // If the transmission fails, blocks until the connection is repaired and
 // retries to receive the message. Fails if the peer is closed via Close().
-func (p *Peer) recv() (msg.Msg, error) {
+func (p *Peer) recv() (wire.Msg, error) {
 	// Repeatedly attempt to receive a message.
 	for {
 		// Protect against race with concurrent replaceConn().
@@ -93,7 +93,7 @@ func (p *Peer) recvLoop() {
 //
 // The passed context is used to timeout the send operation.
 // However, the peer's internal connection's Send() call cannot be aborted.
-func (p *Peer) Send(ctx context.Context, m msg.Msg) error {
+func (p *Peer) Send(ctx context.Context, m wire.Msg) error {
 	select {
 	case <-p.closed: // Wait for closing of the peer.
 		return errors.New("peer closed")

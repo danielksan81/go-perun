@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 
 	"perun.network/go-perun/log"
-	"perun.network/go-perun/wire/msg"
+	wire "perun.network/go-perun/wire/msg"
 )
 
 const (
@@ -29,7 +29,7 @@ func init() {
 // MsgTuple is a helper type, because channels cannot have tuple types.
 type MsgTuple struct {
 	*Peer
-	msg.Msg
+	wire.Msg
 }
 
 // Receiver is a helper object that can subscribe to different message
@@ -46,12 +46,12 @@ type Receiver struct {
 	renewedMsgs chan struct{} // Whether the message channel has been renewed.
 	msgs        chan MsgTuple // Queued messages. Closed when not subscribed.
 	closed      chan struct{}
-	subs        map[msg.Category][]*Peer // The receiver's subscription list.
+	subs        map[wire.Category][]*Peer // The receiver's subscription list.
 }
 
 // Subscribe subscribes a receiver to all of a peer's messages of the requested
 // message category. Returns an error if the receiver is closed.
-func (r *Receiver) Subscribe(p *Peer, c msg.Category) error {
+func (r *Receiver) Subscribe(p *Peer, c wire.Category) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -100,11 +100,11 @@ func (r *Receiver) safelyGetMsgs() chan MsgTuple {
 // Unsubscribe removes a receiver's subscription to a peer's messages of the
 // requested category. Returns an error if the receiver was not subscribed to
 // the requested peer and message category.
-func (r *Receiver) Unsubscribe(p *Peer, c msg.Category) {
+func (r *Receiver) Unsubscribe(p *Peer, c wire.Category) {
 	r.unsubscribe(p, c, true)
 }
 
-func (r *Receiver) unsubscribe(p *Peer, c msg.Category, delete bool) {
+func (r *Receiver) unsubscribe(p *Peer, c wire.Category, delete bool) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	for i, _p := range r.subs[c] {
@@ -214,7 +214,7 @@ func (r *Receiver) isEmpty() bool {
 func NewReceiver() *Receiver {
 	return &Receiver{
 		msgs:        closedMsgTupleChan,
-		subs:        make(map[msg.Category][]*Peer),
+		subs:        make(map[wire.Category][]*Peer),
 		closed:      make(chan struct{}),
 		renewedMsgs: make(chan struct{}, 1),
 	}
