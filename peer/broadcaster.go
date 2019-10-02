@@ -8,7 +8,7 @@ import (
 	"context"
 	"strconv"
 
-	"perun.network/go-perun/wire/msg"
+	wire "perun.network/go-perun/wire/msg"
 )
 
 // Broadcaster is a communications object that allows sending a single message
@@ -27,7 +27,7 @@ type Broadcaster struct {
 // The returned error is nil if the message was successfully sent to all peers.
 // Otherwise, the returned error contains an array of all individual errors
 // that occurred.
-func (b *Broadcaster) Send(ctx context.Context, m msg.Msg) *BroadcastError {
+func (b *Broadcaster) Send(ctx context.Context, m wire.Msg) *BroadcastError {
 	// Send all messages in parallel.
 	for i, p := range b.peers {
 		go func(i int, p *Peer) {

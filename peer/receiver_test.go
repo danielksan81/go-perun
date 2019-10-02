@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"perun.network/go-perun/wire/msg"
+	wire "perun.network/go-perun/wire/msg"
 )
 
 // Timeout controls how long to wait until we decide that something will never
@@ -31,21 +31,21 @@ func TestReceiver_Subscribe(t *testing.T) {
 	p := newPeer(nil, nil, nil, nil)
 
 	assert.True(t, r.isEmpty(), "receiver must be empty")
-	assert.NoError(t, r.Subscribe(p, msg.Control), "first subscribe must not fail")
+	assert.NoError(t, r.Subscribe(p, wire.Control), "first subscribe must not fail")
 	assert.False(t, r.isEmpty(), "receiver must not be empty")
-	assert.Panics(t, func() { r.Subscribe(p, msg.Control) }, "double subscription must panic")
-	assert.NotPanics(t, func() { r.Unsubscribe(p, msg.Control) }, "first unsubscribe must not panic")
-	assert.Panics(t, func() { r.Unsubscribe(p, msg.Control) }, "double unsubscribe must panic")
+	assert.Panics(t, func() { r.Subscribe(p, wire.Control) }, "double subscription must panic")
+	assert.NotPanics(t, func() { r.Unsubscribe(p, wire.Control) }, "first unsubscribe must not panic")
+	assert.Panics(t, func() { r.Unsubscribe(p, wire.Control) }, "double unsubscribe must panic")
 	assert.True(t, r.isEmpty(), "receiver must be empty")
-	assert.NoError(t, r.Subscribe(p, msg.Control), "subscribe on empty must not fail")
+	assert.NoError(t, r.Subscribe(p, wire.Control), "subscribe on empty must not fail")
 	assert.False(t, r.isEmpty(), "receiver must not be empty")
 	r.UnsubscribeAll()
 	assert.True(t, r.isEmpty(), "receiver must be empty")
 
 	close(p.closed) // Manual close needed here.
-	assert.Error(t, r.Subscribe(p, msg.Control), "subscription on closed peer must fail")
+	assert.Error(t, r.Subscribe(p, wire.Control), "subscription on closed peer must fail")
 	r.Close()
-	assert.Error(t, r.Subscribe(p, msg.Control), "subscription on closed receiver must fail")
+	assert.Error(t, r.Subscribe(p, wire.Control), "subscription on closed receiver must fail")
 }
 
 func TestReceiver_Next(t *testing.T) {
@@ -60,7 +60,7 @@ func TestReceiver_Next(t *testing.T) {
 	assert.Equal(t, r.Next(), closedMsgTupleChanAsRead,
 		"fresh receivers must return closed channel in Next()")
 
-	r.Subscribe(p, msg.Control)
+	r.Subscribe(p, wire.Control)
 	next := r.Next()
 	assert.NotEqual(t, next, closedMsgTupleChan,
 		"subscribed receivers must not return closed Next() channel")
@@ -69,7 +69,7 @@ func TestReceiver_Next(t *testing.T) {
 		t.Fatal("subscribed receiver closed Next() channel")
 	default:
 	}
-	r.Unsubscribe(p, msg.Control)
+	r.Unsubscribe(p, wire.Control)
 
 	select {
 	case _, ok := <-next:
@@ -78,12 +78,12 @@ func TestReceiver_Next(t *testing.T) {
 		t.Fatal("unsubscribed receiver did not close Next() channel")
 	}
 
-	out.Send(msg.NewPingMsg())
+	out.Send(wire.NewPingMsg())
 
 	// Ensure that the peer received the message.
 	<-time.NewTimer(Timeout).C
 
-	r.Subscribe(p, msg.Control)
+	r.Subscribe(p, wire.Control)
 	// Get a new Next() channel.
 	next = r.Next()
 	// The previously sent message must not appear.
@@ -97,13 +97,13 @@ func TestReceiver_Next(t *testing.T) {
 	case <-time.NewTimer(Timeout).C:
 	}
 
-	out.Send(msg.NewPongMsg())
+	out.Send(wire.NewPongMsg())
 	// The new message must appear.
 	select {
 	case m, ok := <-next:
 		if ok {
 			assert.Equal(t, m.Peer, p, "message must come from the subscribed peer")
-			assert.NotNil(t, m.Msg.(*msg.PongMsg), "received message must be PongMsg")
+			assert.NotNil(t, m.Msg.(*wire.PongMsg), "received message must be PongMsg")
 		} else {
 			t.Fatal("subscribed receivers must not close the NextWait() channel")
 		}
@@ -143,7 +143,7 @@ func TestReceiver_NextWait(t *testing.T) {
 
 	next := r.NextWait()
 
-	out.Send(msg.NewPingMsg())
+	out.Send(wire.NewPingMsg())
 	// The receiver is not yet subscribed and must not see any messages.
 	select {
 	case _, ok := <-next:
@@ -155,7 +155,7 @@ func TestReceiver_NextWait(t *testing.T) {
 	case <-time.NewTimer(Timeout).C:
 	}
 
-	r.Subscribe(p, msg.Control)
+	r.Subscribe(p, wire.Control)
 	// The previously sent message must not appear.
 	select {
 	case _, ok := <-next:
@@ -167,13 +167,13 @@ func TestReceiver_NextWait(t *testing.T) {
 	case <-time.NewTimer(Timeout).C:
 	}
 
-	out.Send(msg.NewPongMsg())
+	out.Send(wire.NewPongMsg())
 	// The new message must appear.
 	select {
 	case m, ok := <-next:
 		if ok {
 			assert.Equal(t, m.Peer, p, "message must come from the subscribed peer")
-			assert.NotNil(t, m.Msg.(*msg.PongMsg), "received message must be PongMsg")
+			assert.NotNil(t, m.Msg.(*wire.PongMsg), "received message must be PongMsg")
 		} else {
 			t.Fatal("subscribed receivers must not close the NextWait() channel")
 		}
@@ -216,14 +216,14 @@ func TestReceiver_renewChannel_transfer(t *testing.T) {
 	p := newPeer(nil, in, nil, nil)
 	go p.recvLoop()
 	r := NewReceiver()
-	r.Subscribe(p, msg.Control)
+	r.Subscribe(p, wire.Control)
 
-	out.Send(msg.NewPingMsg())
+	out.Send(wire.NewPingMsg())
 	<-time.NewTimer(Timeout).C
 
 	r.UnsubscribeAll()
 	assert.True(t, r.isEmpty(), "receiver must be empty")
-	r.Subscribe(p, msg.Control)
+	r.Subscribe(p, wire.Control)
 	assert.False(t, r.isEmpty(), "receiver must not be empty")
 
 	select {

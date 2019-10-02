@@ -7,7 +7,7 @@ package peer
 import (
 	"io"
 
-	"perun.network/go-perun/wire/msg"
+	wire "perun.network/go-perun/wire/msg"
 )
 
 var _ Conn = (*serializedConn)(nil)
@@ -24,16 +24,16 @@ func NewConn(conn io.ReadWriteCloser) Conn {
 	}
 }
 
-func (c *serializedConn) Send(m msg.Msg) error {
-	if err := msg.Encode(m, c.conn); err != nil {
+func (c *serializedConn) Send(m wire.Msg) error {
+	if err := wire.Encode(m, c.conn); err != nil {
 		c.conn.Close()
 		return err
 	}
 	return nil
 }
 
-func (c *serializedConn) Recv() (msg.Msg, error) {
-	if m, err := msg.Decode(c.conn); err != nil {
+func (c *serializedConn) Recv() (wire.Msg, error) {
+	if m, err := wire.Decode(c.conn); err != nil {
 		c.conn.Close()
 		return nil, err
 	} else {
