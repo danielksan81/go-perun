@@ -5,40 +5,15 @@
 package peer
 
 import (
-	"context"
-	"io/ioutil"
-	"os"
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	"perun.network/go-perun/backend/sim/wallet"
 	wire "perun.network/go-perun/wire/msg"
 )
 
-
-type DummyDialer struct {
-}
-
-func (DummyDialer) Dial(ctx context.Context, address Address) (Conn, error) {
-	panic("Not implemented")
-}
-
-func (DummyDialer) Close() error {
-	panic("Not implemented")
-}
-
-
 func TestSubscriptions(t *testing.T) {
-	rng := rand.New(rand.NewSource(1))
-	addr := wallet.NewRandomAddress(rng)
-	tmpFile, _ := ioutil.TempFile("", "peer-subscription-test")
-	defer os.Remove(tmpFile.Name())
-	conn := NewConn(tmpFile)
-	onClose := func(*Peer) {}
-	dialer := new(DummyDialer)
-	peer := newPeer(addr, conn, onClose, dialer)
+	peer := newPeer(nil, nil, nil, nil)
 
 	r0 := NewReceiver()
 	r1 := NewReceiver()
