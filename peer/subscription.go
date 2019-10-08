@@ -13,6 +13,8 @@ import (
 	wire "perun.network/go-perun/wire/msg"
 )
 
+// subscriptions handles (un)registering Receivers for a peer's messages.
+// It is separate from Peer to reduce the complexity of that type.
 type subscriptions struct {
 	mutex sync.RWMutex
 	subs  map[wire.Category][]*Receiver
@@ -54,6 +56,7 @@ func (s *subscriptions) delete(cat wire.Category, r *Receiver) {
 			return
 		}
 	}
+	log.Panic("deleted receiver that was not subscribed")
 }
 
 func (s *subscriptions) isEmpty() bool {

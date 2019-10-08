@@ -8,6 +8,8 @@ import (
 	"io"
 )
 
+var _ io.ReadWriteCloser = (*pipeConn)(nil)
+
 // pipeConn is a connection that sends over a local pipe.
 // It is probably only useful for simpler testing.
 type pipeConn struct {
