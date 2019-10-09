@@ -132,13 +132,19 @@ func TestPeer_Close(t *testing.T) {
 
 	N := 1000
 
+	done := make(chan struct{}, N)
 	// Test it often to detect races.
 	for i := 0; i < N; i++ {
-		t.Run("test peer close", testPeer_Close)
+		go testPeer_Close(t, done)
+	}
+
+	for i := 0; i < N; i++ {
+		<-done
 	}
 }
 
-func testPeer_Close(t *testing.T) {
+func testPeer_Close(t *testing.T, done chan struct{}) {
+	defer func() { done <- struct{}{} }()
 	setup := MakeSetup()
 	// Remember bob's address for later, we will need it for a registry lookup.
 	bobAddress := setup.alice.partner.PerunAddress
@@ -146,11 +152,12 @@ func testPeer_Close(t *testing.T) {
 	found, _ := setup.alice.Registry.Find(bobAddress)
 	assert.Equal(t, setup.alice.partner, found)
 	// Close Alice's connection to Bob.
-	assert.NoError(t, setup.alice.partner.Close(), "closing a peer once must succeed")
-	assert.Error(t, setup.alice.partner.Close(), "closing peers twice must fail")
+	assert.Nil(t, setup.alice.partner.Close(), "closing a peer once must succeed")
+	assert.NotNil(t, setup.alice.partner.Close(), "closing peers twice must fail")
 
 	// Sending over closed peers (not connections) must fail.
-	assert.Error(t, setup.alice.partner.Send(context.Background(), wire.NewPingMsg()), "sending to bob must fail")
+	err := setup.alice.partner.Send(context.Background(), wire.NewPingMsg())
+	assert.NotNil(t, err, "sending to bob must fail", err)
 	// Sending from the other side must succeed, as the remote will repair the
 	// peer connection.
 	assert.Nil(t, setup.bob.partner.Send(context.Background(), wire.NewPingMsg()), "sending to alice must succeed (new socket)")
@@ -207,5 +214,5 @@ func TestPeer_ReplaceConn_Closed(t *testing.T) {
 
 	setup.alice.partner.Close()
 	conn, _ := newPipeConnPair()
-	assert.False(t, setup.alice.partner.replaceConn(conn), "replacing on closed peer must fail")
+	assert.False(t, setup.alice.partner.replaceConn(conn, true), "replacing on closed peer must fail")
 }

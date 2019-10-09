@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"perun.network/go-perun/backend/sim/wallet"
 	wire "perun.network/go-perun/wire/msg"
@@ -58,7 +59,7 @@ func TestBroadcaster_Send_Error(t *testing.T) {
 	b := NewBroadcaster(sendPeers)
 
 	err := b.Send(context.Background(), wire.NewPingMsg())
-	assert.Error(t, err, "broadcast must fail")
+	require.Error(t, err, "broadcast must fail")
 	assert.Equal(t, len(err.errors), 1)
 	assert.Equal(t, err.errors[0].index, 1)
 	assert.Equal(t, err.Error(), "failed to send message:\npeer[1]: "+err.errors[0].err.Error())

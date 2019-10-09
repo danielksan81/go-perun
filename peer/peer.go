@@ -41,8 +41,9 @@ type Peer struct {
 	sending   sync.Mutex // Blocks multiple Send calls.
 	connMutex sync.Mutex // Protect against data race when updating conn.
 
-	closed    chan struct{} // Indicates whether the peer is closed.
-	retrySend chan struct{} // Signals that Send calls can retry. Capacity 1.
+	closed         chan struct{} // Indicates whether the peer is closed.
+	retrySend      chan struct{} // Send calls can retry. Capacity 1.
+	externalRepair chan struct{} // Signals external repair. Capacity 1.
 
 	closeWork func(*Peer) // Work to be done when the peer is closed.
 	repairer  Dialer      // The dialer that is used to repair the connection.
@@ -58,6 +59,9 @@ func (p *Peer) recv() (wire.Msg, error) {
 		p.connMutex.Lock()
 		conn := p.conn
 		p.connMutex.Unlock()
+
+		// Discard any unread externalRepair signals.
+		consume(p.externalRepair)
 
 		if m, err := conn.Recv(); err == nil {
 			return m, nil
@@ -95,6 +99,8 @@ func (p *Peer) Send(ctx context.Context, m wire.Msg) error {
 	select {
 	case <-ctx.Done():
 		return errors.New("aborted manually")
+	case <-p.closed:
+		return errors.New("peer closed")
 	default:
 	}
 
@@ -146,30 +152,30 @@ func (p *Peer) Send(ctx context.Context, m wire.Msg) error {
 }
 
 // repair attempts to repair the peer's connection.
-// It is passed a either retrySend or retryRecv, which are used to detect
-// external repairing of the connection, in which case it reads the signal from
-// the passed channel.
+// It is called by recv() whenever there is a communication error.
 //
 // repair() blocks until the channel is closed or repaired, and returns true if
-// the channel was successfully repaired, and false otherwise. The function can
-// be called concurrently, but must only be called from within Send() and
-// recv(). Send() must pass retrySend, and recv() must pass retryRecv. When
-// called concurrently, only one instance of the function tries to repair the
-// connection, and the other instance is blocked until the connection is
-// repaired or the peer is closed.
+// the channel was successfully repaired, and false otherwise. repair() is
+// never called multiple times simultaneously.
 //
 // Internally, repair() tries to dial a new connection to the peer repeatedly,
 // until dialing succeeds or the connection is replaced externally (through
 // the client's listener, via the registry), or the peer is manually closed.
 func (p *Peer) repair() bool {
+	// Closed peers or those without a repairer cannot be repaired.
+	if p.isClosed() || p.repairer == nil {
+		return false
+	}
+
 	// Do not repair as a consequence of the connection being closed in
 	// replaceConn(). Wait until replaceConn() is done, then check whether we
 	// still need to repair anything.
 	p.replacing.Lock()
 	p.replacing.Unlock()
 
-	if p.isClosed() {
-		return false
+	// Succeed immediately if the connection has already been replaced.
+	if consume(p.externalRepair) {
+		return true
 	}
 
 	// This is used to abort the dialing process.
@@ -203,19 +209,38 @@ func (p *Peer) repair() bool {
 				}
 			}()
 			return false
+		case <-p.externalRepair: // Externally repaired (through Listener)?
+			go func() {
+				if conn := <-dialed; conn != nil {
+					p.replaceConn(conn, false)
+				}
+			}()
+			return true
 		case conn := <-dialed: // If dialing returned, check for success.
 			if conn != nil {
 				// This unblocks Send().
-				p.replaceConn(conn)
+				p.replaceConn(conn, false)
 				return true
 			}
 		}
 	}
 }
 
+// consume nonblockingly tries to consume a signal from a singal channel.
+// Returns whether a signal was consumed.
+func consume(signal <-chan struct{}) bool {
+	select {
+	case <-signal:
+		return true
+	default:
+		return false
+	}
+}
+
 // replaceConn replaces a peer's connection, if the peer itself is not closed.
-// Returns whether the peer's connection has been replaced.
-func (p *Peer) replaceConn(conn Conn) bool {
+// Returns whether the peer's connection has been replaced. If 'external' is
+// true, signals repair() to abort and succeed immediately.
+func (p *Peer) replaceConn(conn Conn, external bool) bool {
 	// Replacing is not thread-safe.
 	p.replacing.Lock()
 	defer p.replacing.Unlock()
@@ -226,28 +251,28 @@ func (p *Peer) replaceConn(conn Conn) bool {
 		return false
 	}
 
-	clear(p.retrySend)
-
 	// Close the old connection to fail all send and receive calls.
 	p.conn.Close()
 	p.connMutex.Lock() // Protect against torn reads in recv() and Send().
 	p.conn = conn
 	p.connMutex.Unlock()
 
-	// Send the retry signal to both send and recv.
-	p.retrySend <- struct{}{}
+	if external {
+		select {
+		case p.externalRepair <- struct{}{}:
+		default:
+		}
+	}
+
+	// Send retry signal to Send(), if there is none already.
+	select {
+	case p.retrySend <- struct{}{}:
+	default:
+	}
 
 	log.Debugf("replaced connection for peer %v", p.PerunAddress)
 
 	return true
-}
-
-// clear empties an event channel's unread events.
-func clear(event <-chan struct{}) {
-	select {
-	case <-event:
-	default:
-	}
 }
 
 // isClosed checks whether the peer is marked as closed.
@@ -306,8 +331,9 @@ func newPeer(addr Address, conn Conn, closeWork func(*Peer), repairer Dialer) *P
 		conn: conn,
 		subs: makeSubscriptions(p),
 
-		closed:    make(chan struct{}),
-		retrySend: make(chan struct{}, 1),
+		closed:         make(chan struct{}),
+		retrySend:      make(chan struct{}, 1),
+		externalRepair: make(chan struct{}, 1),
 
 		closeWork: closeWork,
 		repairer:  repairer,

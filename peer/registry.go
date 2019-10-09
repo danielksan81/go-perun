@@ -72,7 +72,7 @@ func (r *Registry) Register(addr Address, conn Conn) (peer *Peer) {
 		// Start receiving messages.
 		go peer.recvLoop()
 	} else {
-		peer.replaceConn(conn)
+		peer.replaceConn(conn, true)
 	}
 
 	return

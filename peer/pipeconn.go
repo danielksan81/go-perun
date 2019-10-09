@@ -13,18 +13,18 @@ var _ io.ReadWriteCloser = (*pipeConn)(nil)
 // pipeConn is a connection that sends over a local pipe.
 // It is probably only useful for simpler testing.
 type pipeConn struct {
-	io.Reader
-	io.Writer
-	io.Closer
+	io.ReadCloser
+	io.WriteCloser
 }
 
 func (c *pipeConn) Close() error {
-	return c.Closer.Close()
+	c.ReadCloser.Close()
+	return c.WriteCloser.Close()
 }
 
 // newPipeConnPair creates endpoints that are connected via pipes.
 func newPipeConnPair() (a Conn, b Conn) {
 	ra, wa := io.Pipe()
 	rb, wb := io.Pipe()
-	return NewConn(&pipeConn{ra, wb, ra}), NewConn(&pipeConn{rb, wa, rb})
+	return NewConn(&pipeConn{ra, wb}), NewConn(&pipeConn{rb, wa})
 }
