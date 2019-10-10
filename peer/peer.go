@@ -35,14 +35,12 @@ type Peer struct {
 	conn Conn          // The peer's connection.
 	subs subscriptions // The receivers that are subscribed to the peer.
 
-	// repairing is a chan instead of a mutex because we need to wait for
-	// Lock() in a select statement in repair() together with other cases.
 	replacing sync.Mutex // Protects conn from replaceConn and Close.
 	sending   sync.Mutex // Blocks multiple Send calls.
 	connMutex sync.Mutex // Protect against data race when updating conn.
 
 	closed         chan struct{} // Indicates whether the peer is closed.
-	retrySend      chan struct{} // Send calls can retry. Capacity 1.
+	retrySend      chan struct{} // Signals Send calls to retry. Capacity 1.
 	externalRepair chan struct{} // Signals external repair. Capacity 1.
 
 	closeWork func(*Peer) // Work to be done when the peer is closed.
@@ -96,15 +94,9 @@ func (p *Peer) recvLoop() {
 // The passed context is used to timeout the send operation.
 // However, the peer's internal connection's Send() call cannot be aborted.
 func (p *Peer) Send(ctx context.Context, m wire.Msg) error {
-	select {
-	case <-ctx.Done():
-		return errors.New("aborted manually")
-	case <-p.closed:
+	if p.isClosed() {
 		return errors.New("peer closed")
-	default:
-	}
-
-	if !p.sending.TryLock(ctx) {
+	} else if !p.sending.TryLock(ctx) {
 		return errors.New("aborted manually")
 	}
 
@@ -162,7 +154,9 @@ func (p *Peer) Send(ctx context.Context, m wire.Msg) error {
 // until dialing succeeds or the connection is replaced externally (through
 // the client's listener, via the registry), or the peer is manually closed.
 func (p *Peer) repair() bool {
-	// Closed peers or those without a repairer cannot be repaired.
+	// Closed peers or those without a repairer cannot be repaired. The
+	// repairer is only nil in test cases, but this makes them much more
+	// readable.
 	if p.isClosed() || p.repairer == nil {
 		return false
 	}

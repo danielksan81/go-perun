@@ -29,7 +29,7 @@ type Setup struct {
 // MakeSetup creates a test setup.
 func MakeSetup() *Setup {
 	a, b := newPipeConnPair()
-	rng := rand.New(rand.NewSource(0x5D0))
+	rng := rand.New(rand.NewSource(0xb0baFEDD))
 	// We need the setup adress when constructing the clients.
 	setup := new(Setup)
 	*setup = Setup{

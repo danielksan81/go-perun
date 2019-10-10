@@ -32,17 +32,23 @@ func (m *Mutex) Lock() {
 }
 
 // TryLock tries to lock the mutex within a timeout provided by a context.
-// For an instant timeout, a nil context can also be passed. Returns whether
-// the mutex was acquired.
+// For an instant timeout, a nil context has to be passed. Returns whether the
+// mutex was acquired.
 func (m *Mutex) TryLock(ctx context.Context) bool {
 	m.initOnce()
 
 	if ctx != nil {
 		select {
+		case <-ctx.Done():
+			return false
+		default:
+		}
+
+		select {
 		case m.locked <- struct{}{}:
 			return true
 		case <-ctx.Done():
-			// Try locking once more in case of instant timeout context.
+			return false
 		}
 	}
 
