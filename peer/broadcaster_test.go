@@ -59,7 +59,7 @@ func TestBroadcaster_Send_Error(t *testing.T) {
 	b := NewBroadcaster(sendPeers)
 
 	err := b.Send(context.Background(), wire.NewPingMsg())
-	require.Error(t, err, "broadcast must fail")
+	require.NotNil(t, err, "broadcast must fail")
 	assert.Equal(t, len(err.errors), 1)
 	assert.Equal(t, err.errors[0].index, 1)
 	assert.Equal(t, err.Error(), "failed to send message:\npeer[1]: "+err.errors[0].err.Error())
