@@ -42,14 +42,15 @@ func TestTryLock_Nil(t *testing.T) {
 	assert.False(t, m.TryLock(nil), "TryLock(nil) on locked mutex must fail")
 }
 
-// TestTryLock_DoneContext tests that a
+// TestTryLock_DoneContext tests that a cancelled context can never be used to
+// acquire the mutex.
 func TestTryLock_DoneContext(t *testing.T) {
 	t.Parallel()
 
 	var m Mutex
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	// Try often because of random select choices.
+	// Try often because of random `select` case choices.
 	for i := 0; i < 256; i++ {
 		assert.False(t, m.TryLock(ctx), "TryLock on closed context must fail")
 	}

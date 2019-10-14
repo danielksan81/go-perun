@@ -38,6 +38,8 @@ func (m *Mutex) TryLock(ctx context.Context) bool {
 	m.initOnce()
 
 	if ctx != nil {
+		// Check for the deadline first so that we do not accidentally lock the
+		// mutex temporarily, which could interfere with other TryLock calls.
 		select {
 		case <-ctx.Done():
 			return false
@@ -46,7 +48,14 @@ func (m *Mutex) TryLock(ctx context.Context) bool {
 
 		select {
 		case m.locked <- struct{}{}:
-			return true
+			// Make sure that the deadline really has not passed.
+			select {
+			case <-ctx.Done():
+				m.Unlock()
+				return false
+			default:
+				return true
+			}
 		case <-ctx.Done():
 			return false
 		}
