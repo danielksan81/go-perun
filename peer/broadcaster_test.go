@@ -24,12 +24,10 @@ func TestBroadcaster_Send(t *testing.T) {
 	recvPeers := make([]*Peer, N)
 	sendPeers := make([]*Peer, N)
 
-	r := NewReceiver()
 	for i := 0; i < N; i++ {
 		in, out := newPipeConnPair()
 		sendPeers[i] = newPeer(nil, out, nil, nil)
 		recvPeers[i] = newPeer(nil, in, nil, nil)
-		r.Subscribe(recvPeers[i], wire.Control)
 		go recvPeers[i].recvLoop()
 	}
 
@@ -45,12 +43,10 @@ func TestBroadcaster_Send_Error(t *testing.T) {
 	recvPeers := make([]*Peer, N)
 	sendPeers := make([]*Peer, N)
 
-	r := NewReceiver()
 	for i := 0; i < N; i++ {
 		in, out := newPipeConnPair()
 		sendPeers[i] = reg.Register(wallet.NewRandomAddress(rng), out)
 		recvPeers[i] = newPeer(nil, in, nil, nil)
-		r.Subscribe(recvPeers[i], wire.Control)
 		go recvPeers[i].recvLoop()
 	}
 
