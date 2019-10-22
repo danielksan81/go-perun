@@ -5,6 +5,7 @@
 package peer
 
 import (
+	"context"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -18,13 +19,6 @@ const (
 	// receiver before blocking.
 	receiverBufferSize = 16
 )
-
-var closedMsgTupleChan chan MsgTuple
-
-func init() {
-	closedMsgTupleChan = make(chan MsgTuple)
-	close(closedMsgTupleChan)
-}
 
 // MsgTuple is a helper type, because channels cannot have tuple types.
 type MsgTuple struct {
@@ -42,16 +36,15 @@ type MsgTuple struct {
 // Next() will fail when the receiver is not subscribed to any peers, while
 // NextWait() will only fail if the receiver is manually closed via Close().
 type Receiver struct {
-	mutex       sync.Mutex    // Protects all fields.
-	renewedMsgs chan struct{} // Whether the message channel has been renewed.
-	msgs        chan MsgTuple // Queued messages. Closed when not subscribed.
-	closed      chan struct{}
-	subs        map[wire.Category][]*Peer // The receiver's subscription list.
+	mutex  sync.Mutex    // Protects all fields.
+	msgs   chan MsgTuple // Queued messages.
+	closed chan struct{}
+	subs   []*Peer // The receiver's subscription list.
 }
 
 // Subscribe subscribes a receiver to all of a peer's messages of the requested
 // message category. Returns an error if the receiver is closed.
-func (r *Receiver) Subscribe(p *Peer, c wire.Category) error {
+func (r *Receiver) Subscribe(p *Peer, predicate func(wire.Msg) bool) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -61,63 +54,33 @@ func (r *Receiver) Subscribe(p *Peer, c wire.Category) error {
 	default:
 	}
 
-	empty := r.isEmpty()
-
-	if err := p.subs.add(c, r); err != nil {
+	if err := p.subs.add(predicate, r); err != nil {
 		return err
 	}
 
-	r.subs[c] = append(r.subs[c], p)
+	r.subs = append(r.subs, p)
 
-	if empty {
-		r.renewChannel()
-	}
 	return nil
-}
-
-func (r *Receiver) renewChannel() {
-	old := r.msgs
-	r.msgs = make(chan MsgTuple, receiverBufferSize)
-
-	// Transfer all remaining messages from the old channel.
-	for m := range old {
-		r.msgs <- m
-	}
-
-	// Try to notify the renewed message channel event.
-	select {
-	case r.renewedMsgs <- struct{}{}:
-	default:
-	}
-}
-
-func (r *Receiver) safelyGetMsgs() chan MsgTuple {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	return r.msgs
 }
 
 // Unsubscribe removes a receiver's subscription to a peer's messages of the
 // requested category. Returns an error if the receiver was not subscribed to
 // the requested peer and message category.
-func (r *Receiver) Unsubscribe(p *Peer, c wire.Category) {
-	r.unsubscribe(p, c, true)
+func (r *Receiver) Unsubscribe(p *Peer) {
+	r.unsubscribe(p, true)
 }
 
-func (r *Receiver) unsubscribe(p *Peer, c wire.Category, delete bool) {
+func (r *Receiver) unsubscribe(p *Peer, delete bool) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	for i, _p := range r.subs[c] {
+	for i, _p := range r.subs {
 		if _p == p {
 			if delete {
-				p.subs.delete(c, r)
+				p.subs.delete(r)
 			}
-			r.subs[c][i] = r.subs[c][len(r.subs[c])-1]
-			r.subs[c] = r.subs[c][:len(r.subs[c])-1]
+			r.subs[i] = r.subs[len(r.subs)-1]
+			r.subs = r.subs[:len(r.subs)-1]
 
-			if r.isEmpty() {
-				close(r.msgs)
-			}
 			return
 		}
 	}
@@ -132,62 +95,20 @@ func (r *Receiver) UnsubscribeAll() {
 }
 
 func (r *Receiver) unsubscribeAll() {
-	empty := r.isEmpty()
-
-	for cat, subs := range r.subs {
-		for _, p := range subs {
-			p.subs.delete(cat, r)
-		}
-		r.subs[cat] = nil
+	for _, p := range r.subs {
+		p.subs.delete(r)
 	}
-	if !empty {
-		close(r.msgs)
-	}
+	r.subs = nil
 }
 
 // Next returns a channel to the next message.
-// If, before a new message arrives, the receiver is no longer subscribed to
-// any peers, then the returned channel is closed.
-//
-// The returned channel has to be read. Until the message is read from the
-// returned channel, no new messages can be read from the receiver.
-func (r *Receiver) Next() <-chan MsgTuple {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
-	return r.msgs
-}
-
-// NextWait returns a channel that will hold the next received message.
-// Unlike Next(), NextWait() will not abort when the receiver is no longer
-// subscribed to anything. NextWait() will abort when Close() is called.
-//
-// The returned channel has to be read. Until the message is read from the
-// returned channel, no new messages can be read from the receiver.
-func (r *Receiver) NextWait() <-chan MsgTuple {
-	next := make(chan MsgTuple, 1)
-	go func() {
-		for {
-			select {
-			case m, ok := <-r.safelyGetMsgs():
-				if ok { // We got a message.
-					next <- m
-					return
-				}
-				select { // We just unsubscribed from all peers.
-				case <-r.closed: // The receiver is closed.
-					close(next)
-					return
-				case <-r.renewedMsgs: // We subscribed to something again.
-				}
-			case <-r.closed: // Receiver is closed.
-				close(next)
-				return
-			}
-		}
-	}()
-
-	return next
+func (r *Receiver) Next(ctx context.Context) (*Peer, wire.Msg) {
+	select {
+	case <-ctx.Done():
+		return nil, nil
+	case tuple := <-r.msgs:
+		return tuple.Peer, tuple.Msg
+	}
 }
 
 // Close closes a receiver.
@@ -196,26 +117,17 @@ func (r *Receiver) Close() {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	// Safely close the channel.
-	func() { defer recover(); close(r.closed) }()
-	// Remove all subscriptions; this also closes r.msgs.
+	func() { defer func() { recover() }(); close(r.closed) }()
+	// Remove all subscriptions.
 	r.unsubscribeAll()
-}
-
-func (r *Receiver) isEmpty() bool {
-	for _, cats := range r.subs {
-		if len(cats) != 0 {
-			return false
-		}
-	}
-	return true
+	// Close the message channel.
+	func() { defer func() { recover() }(); close(r.msgs) }()
 }
 
 // NewReceiver creates a new receiver.
 func NewReceiver() *Receiver {
 	return &Receiver{
-		msgs:        closedMsgTupleChan,
-		subs:        make(map[wire.Category][]*Peer),
-		closed:      make(chan struct{}),
-		renewedMsgs: make(chan struct{}, 1),
+		msgs:   make(chan MsgTuple, receiverBufferSize),
+		closed: make(chan struct{}),
 	}
 }

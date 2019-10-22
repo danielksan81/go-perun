@@ -5,9 +5,8 @@
 package peer
 
 import (
+	"context"
 	"sync"
-
-	"github.com/pkg/errors"
 
 	"perun.network/go-perun/log"
 )
@@ -44,38 +43,63 @@ func (r *Registry) find(addr Address) (*Peer, int) {
 	return nil, -1
 }
 
-// Find looks up the peer via its perun address.
-func (r *Registry) Find(addr Address) (*Peer, error) {
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
+// Get looks up the peer via its perun address.
+// If the peer does not exist yet, creates a placeholder peer and dials the
+// requested address. When the dialling finishes, completes the peer or closes
+// it, depending on the success of the dialing operation. The unfinished peer
+// object can be used already, but it will block until the peer is finished or
+// closed.
+func (r *Registry) Get(addr Address) *Peer {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 
 	if p, i := r.find(addr); i != -1 {
-		return p, nil
+		return p
 	}
-	return nil, errors.New("peer not found")
+
+	// Create "nonexistent" peer (nil connection).
+	peer := r.addPeer(addr, nil)
+
+	// Dial the peer in the background.
+	go func() {
+		conn, err := r.repairer.Dial(context.TODO(), addr)
+		if err != nil {
+			peer.Close()
+		} else {
+			peer.create(conn)
+		}
+	}()
+	return peer
 }
 
 // Register registers a peer in the registry.
-// If a peer with the same perun address already existed, replaces that peer's
-// connection with the new peer's connection, but keeps the old peer object.
+// If a peer with the same perun address already existed, returns that peer.
 // Otherwise, enters the new peer into the registry.
 func (r *Registry) Register(addr Address, conn Conn) (peer *Peer) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
 	if peer, _ = r.find(addr); peer == nil {
-		// Create and register a new peer.
-		peer = newPeer(addr, conn, func(p *Peer) { r.delete(p) }, r.repairer)
-		r.peers = append(r.peers, peer)
-		// Setup the peer's subscriptions.
-		r.subscribe(peer)
-		// Start receiving messages.
-		go peer.recvLoop()
+		peer = r.addPeer(addr, conn)
 	} else {
-		peer.replaceConn(conn, true)
+		peer.create(conn)
+		return peer
 	}
 
 	return
+}
+
+// addPeer adds a new peer to the registry.
+func (r *Registry) addPeer(addr Address, conn Conn) *Peer {
+	// Create and register a new peer.
+	peer := newPeer(addr, conn, func(p *Peer) { r.delete(p) }, r.repairer)
+	r.peers = append(r.peers, peer)
+	// Setup the peer's subscriptions.
+	r.subscribe(peer)
+	// Start receiving messages.
+	go peer.recvLoop()
+
+	return peer
 }
 
 // delete deletes a peer from the registry.

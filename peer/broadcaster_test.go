@@ -66,5 +66,4 @@ func TestNewBroadcaster(t *testing.T) {
 
 	b := NewBroadcaster(peers)
 	assert.Equal(t, peers, b.peers)
-	assert.NotPanics(t, func() { close(b.gather) })
 }

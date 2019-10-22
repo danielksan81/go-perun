@@ -17,14 +17,19 @@ import (
 // It is separate from Peer to reduce the complexity of that type.
 type subscriptions struct {
 	mutex sync.RWMutex
-	subs  map[wire.Category][]*Receiver
+	subs  []subscription
 	peer  *Peer
+}
+
+type subscription struct {
+	receiver  *Receiver
+	predicate func(wire.Msg) bool
 }
 
 // add adds a receiver to the subscriptions.
 // If the receiver was already subscribed, panics.
 // If the peer is closed, returns an error.
-func (s *subscriptions) add(cat wire.Category, r *Receiver) error {
+func (s *subscriptions) add(predicate func(wire.Msg) bool, r *Receiver) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -32,26 +37,25 @@ func (s *subscriptions) add(cat wire.Category, r *Receiver) error {
 		return errors.New("peer closed")
 	}
 
-	for _, rec := range s.subs[cat] {
-		if rec == r {
+	for _, rec := range s.subs {
+		if rec.receiver == r {
 			log.Panic("duplicate peer subscription")
 		}
 	}
 
-	s.subs[cat] = append(s.subs[cat], r)
+	s.subs = append(s.subs, subscription{receiver: r, predicate: predicate})
 
 	return nil
 }
 
-func (s *subscriptions) delete(cat wire.Category, r *Receiver) {
+func (s *subscriptions) delete(r *Receiver) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	subs := s.subs[cat]
-	for i, rec := range s.subs[cat] {
-		if rec == r {
-			subs[i] = subs[len(subs)-1]
-			s.subs[cat] = subs[:len(subs)-1]
+	for i, sub := range s.subs {
+		if sub.receiver == r {
+			s.subs[i] = s.subs[len(s.subs)-1]
+			s.subs = s.subs[:len(s.subs)-1]
 
 			return
 		}
@@ -60,26 +64,20 @@ func (s *subscriptions) delete(cat wire.Category, r *Receiver) {
 }
 
 func (s *subscriptions) isEmpty() bool {
-	for _, cat := range s.subs {
-		if len(cat) != 0 {
-			return false
-		}
-	}
-	return true
+	return len(s.subs) == 0
 }
 
 func (s *subscriptions) put(m wire.Msg, p *Peer) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
-	for _, rec := range s.subs[m.Category()] {
-		rec.msgs <- MsgTuple{p, m}
+	for _, sub := range s.subs {
+		if sub.predicate(m) {
+			sub.receiver.msgs <- MsgTuple{p, m}
+		}
 	}
 }
 
 func makeSubscriptions(p *Peer) subscriptions {
-	return subscriptions{
-		peer: p,
-		subs: make(map[wire.Category][]*Receiver),
-	}
+	return subscriptions{peer: p}
 }

@@ -15,69 +15,45 @@ import (
 	wire "perun.network/go-perun/wire/msg"
 )
 
-// Peer is an authenticated and self-repairing connection to a Perun peer.
+// Peer is an authenticated connection to a Perun peer.
 // It contains the peer's identity. Peers are thread-safe.
 // Peers must not be created manually. The creation of peers is handled by the
 // Registry, which tracks all existing peers. The registry, in turn, is used by
 // the Client.
 //
 // Sending messages to a peer is done via the Send() method, or via the
-// Broadcaster helper type. Receiving messages can only be done via the
-// Receiver helper type (by subscribing).
+// Broadcaster helper type. To receive messages from a Peer, use the Receiver
+// helper type (by subscribing).
 //
-// If a peer's connection fails, it is automatically repaired as soon as a new
-// connection with the peer is established. This process is hidden, so the user
-// will not notice when a connection breaks and is repaired again. This
-// simplifies the communication code greatly.
+// If a peer is entered into the registry, but still being dialed, then it
+// exists in an unfinished state, and all its operations will block until it is
+// dialed or closed.
 type Peer struct {
 	PerunAddress Address // The peer's perun address.
 
 	conn Conn          // The peer's connection.
 	subs subscriptions // The receivers that are subscribed to the peer.
 
-	replacing sync.Mutex // Protects conn from replaceConn and Close.
-	sending   sync.Mutex // Blocks multiple Send calls.
-	connMutex sync.Mutex // Protect against data race when updating conn.
+	creating sync.Mutex // Prevent races when concurrently creating the peer.
+	sending  sync.Mutex // Blocks multiple Send calls.
+	closing  sync.Mutex
 
-	closed         chan struct{} // Indicates whether the peer is closed.
-	retrySend      chan struct{} // Signals Send calls to retry. Capacity 1.
-	externalRepair chan struct{} // Signals external repair. Capacity 1.
+	exists chan struct{} // Indicates whether a peer has been created yet.
+	closed chan struct{} // Indicates whether the peer is closed.
 
 	closeWork func(*Peer) // Work to be done when the peer is closed.
 	repairer  Dialer      // The dialer that is used to repair the connection.
-}
-
-// recv receives a single message from a peer.
-// If the transmission fails, blocks until the connection is repaired and
-// retries to receive the message. Fails if the peer is closed via Close().
-func (p *Peer) recv() (wire.Msg, error) {
-	// Repeatedly attempt to receive a message.
-	for {
-		// Protect against race with concurrent replaceConn().
-		p.connMutex.Lock()
-		conn := p.conn
-		p.connMutex.Unlock()
-
-		// Discard any unread externalRepair signals.
-		consume(p.externalRepair)
-
-		if m, err := conn.Recv(); err == nil {
-			return m, nil
-		} else {
-			log.Debugf("failed recv from peer %v\n", p.PerunAddress)
-			if !p.repair() {
-				return nil, errors.WithMessage(err, "peer closed manually")
-			}
-		}
-	}
 }
 
 // recvLoop continuously receives messages from a peer until it is closed.
 // Received messages are relayed via the peer's subscription system. This is
 // called by the registry when the peer is registered.
 func (p *Peer) recvLoop() {
+	// Wait until the peer exists or is closed.
+	p.waitExists(nil)
+
 	for {
-		if m, err := p.recv(); err != nil {
+		if m, err := p.conn.Recv(); err != nil {
 			log.Debugf("ending recvLoop of closed peer %v", p.PerunAddress)
 			return
 		} else {
@@ -87,186 +63,69 @@ func (p *Peer) recvLoop() {
 	}
 }
 
+// create finishes a peer that does not yet have a connection.
+// This is needed in the registry when a peer is still being dialed, but
+// already registered. This wakes up all operations that were started on the
+// unfinished peer object.
+func (p *Peer) create(conn Conn) {
+	p.creating.Lock()
+	defer p.creating.Unlock()
+
+	if p.conn == nil {
+		p.conn = conn
+		close(p.exists)
+	} else {
+		conn.Close()
+	}
+}
+
+// waitExists waits until the peer is either fully created, or closed.
+// The optional context can be used to add a third condition to wait for.
+func (p *Peer) waitExists(ctx context.Context) {
+	var done <-chan struct{}
+	if ctx != nil {
+		done = ctx.Done()
+	}
+
+	select {
+	case <-p.exists:
+	case <-p.closed:
+	case <-done:
+	}
+}
+
 // Send sends a single message to a peer.
-// If the transmission fails, blocks until the connection is repaired and
-// retries to send the message. Fails if the peer is closed via Close().
+// Fails if the peer is closed via Close() or the transmission fails.
 //
 // The passed context is used to timeout the send operation.
-// However, the peer's internal connection's Send() call cannot be aborted.
 func (p *Peer) Send(ctx context.Context, m wire.Msg) error {
+	// Wait until peer exists, is closed, or context timeout.
+	p.waitExists(ctx)
+
 	if p.isClosed() {
 		return errors.New("peer closed")
 	} else if !p.sending.TryLock(ctx) {
+		p.Close() // replace with p.conn.Close() when reintroducing repair.
 		return errors.New("aborted manually")
 	}
 
-	sent := make(chan struct{}, 1)
+	sent := make(chan error, 1)
 	// Asynchronously send, because we cannot abort Conn.Send().
 	go func() {
-		// Unlock the mutex only after sending is done.
 		defer p.sending.Unlock()
-
-		// Repeatedly attempt to send the message.
-		for {
-			// Protect against torn reads from concurrent replaceConn().
-			p.connMutex.Lock()
-			conn := p.conn
-			p.connMutex.Unlock()
-
-			if err := conn.Send(m); err == nil {
-				sent <- struct{}{}
-				return
-			} else {
-				log.Debugf("failed Send to peer %v", p.PerunAddress)
-
-				// Wait for repair to retry, or abort on timeout / closed peer.
-				select {
-				case <-p.closed:
-					return
-				case <-ctx.Done():
-					return
-				case <-p.retrySend:
-					continue
-				}
-			}
-		}
+		sent <- p.conn.Send(m)
 	}()
 
 	// Return as soon as the sending finishes, times out, or peer is closed.
 	select {
-	case <-sent:
-		return nil
+	case err := <-sent:
+		return err
 	case <-p.closed:
 		return errors.New("peer closed")
 	case <-ctx.Done():
+		p.Close() // replace with p.conn.Close() when reintroducing repair.
 		return errors.New("aborted manually")
 	}
-}
-
-// repair attempts to repair the peer's connection.
-// It is called by recv() whenever there is a communication error.
-//
-// repair() blocks until the channel is closed or repaired, and returns true if
-// the channel was successfully repaired, and false otherwise. repair() is
-// never called multiple times simultaneously.
-//
-// Internally, repair() tries to dial a new connection to the peer repeatedly,
-// until dialing succeeds or the connection is replaced externally (through
-// the client's listener, via the registry), or the peer is manually closed.
-func (p *Peer) repair() bool {
-	// Closed peers or those without a repairer cannot be repaired. The
-	// repairer is only nil in test cases, but this makes them much more
-	// readable.
-	if p.isClosed() || p.repairer == nil {
-		return false
-	}
-
-	// Do not repair as a consequence of the connection being closed in
-	// replaceConn(). Wait until replaceConn() is done, then check whether we
-	// still need to repair anything.
-	p.replacing.Lock()
-	p.replacing.Unlock()
-
-	// Succeed immediately if the connection has already been replaced.
-	if consume(p.externalRepair) {
-		return true
-	}
-
-	// This is used to abort the dialing process.
-	dialctx, dialcancel := context.WithCancel(context.Background())
-	// Automatically abort the dialing upon concurrent success/failure.
-	defer dialcancel()
-
-	// Continuously retry to repair the connection, until successful or the
-	// peer is closed.
-	for {
-		// This holds the dialed connection (or nil, if failed).
-		dialed := make(chan Conn, 1)
-
-		// Asynchronously dial the peer.
-		// This helper function dials a connection, and returns it over a
-		// channel, if successful, otherwise, closes the 'dialed' channel.
-		go func() {
-			defer close(dialed) // Ensure nil is written on failure.
-			// Dial a connection using the registry's dialer.
-			if conn, err := p.repairer.Dial(dialctx, p.PerunAddress); err == nil {
-				dialed <- conn
-			}
-		}()
-
-		// Wait for dialing to return, external repair, or closing.
-		select {
-		case <-p.closed: // Fail if the peer is closed.
-			go func() {
-				if conn := <-dialed; conn != nil {
-					conn.Close()
-				}
-			}()
-			return false
-		case <-p.externalRepair: // Externally repaired (through Listener)?
-			go func() {
-				if conn := <-dialed; conn != nil {
-					p.replaceConn(conn, false)
-				}
-			}()
-			return true
-		case conn := <-dialed: // If dialing returned, check for success.
-			if conn != nil {
-				// This unblocks Send().
-				p.replaceConn(conn, false)
-				return true
-			}
-		}
-	}
-}
-
-// consume nonblockingly tries to consume a signal from a singal channel.
-// Returns whether a signal was consumed.
-func consume(signal <-chan struct{}) bool {
-	select {
-	case <-signal:
-		return true
-	default:
-		return false
-	}
-}
-
-// replaceConn replaces a peer's connection, if the peer itself is not closed.
-// Returns whether the peer's connection has been replaced. If 'external' is
-// true, signals repair() to abort and succeed immediately.
-func (p *Peer) replaceConn(conn Conn, external bool) bool {
-	// Replacing is not thread-safe.
-	p.replacing.Lock()
-	defer p.replacing.Unlock()
-
-	if p.isClosed() {
-		// Abort and close the connection if the peer is closed.
-		conn.Close()
-		return false
-	}
-
-	// Close the old connection to fail all send and receive calls.
-	p.conn.Close()
-	p.connMutex.Lock() // Protect against torn reads in recv() and Send().
-	p.conn = conn
-	p.connMutex.Unlock()
-
-	if external {
-		select {
-		case p.externalRepair <- struct{}{}:
-		default:
-		}
-	}
-
-	// Send retry signal to Send(), if there is none already.
-	select {
-	case p.retrySend <- struct{}{}:
-	default:
-	}
-
-	log.Debugf("replaced connection for peer %v", p.PerunAddress)
-
-	return true
 }
 
 // isClosed checks whether the peer is marked as closed.
@@ -285,9 +144,8 @@ func (p *Peer) isClosed() bool {
 // peer was already closed, results in an error. A closed peer is no longer
 // usable.
 func (p *Peer) Close() error {
-	// Must not interfere with ongoing replacement and closing attempts.
-	p.replacing.Lock()
-	defer p.replacing.Unlock()
+	p.closing.Lock()
+	defer p.closing.Unlock()
 
 	if p.isClosed() {
 		return errors.New("already closed")
@@ -298,14 +156,14 @@ func (p *Peer) Close() error {
 	// Mark the peer as closed.
 	close(p.closed)
 	// Close the peer's connection.
-	p.conn.Close()
+	if p.conn != nil {
+		p.conn.Close()
+	}
 	// Delete this peer from all receivers.
 	p.subs.mutex.Lock()
 	defer p.subs.mutex.Unlock()
-	for cat, recvs := range p.subs.subs {
-		for _, recv := range recvs {
-			recv.unsubscribe(p, cat, false)
-		}
+	for _, recv := range p.subs.subs {
+		recv.receiver.unsubscribe(p, false)
 	}
 
 	return nil
@@ -325,12 +183,16 @@ func newPeer(addr Address, conn Conn, closeWork func(*Peer), repairer Dialer) *P
 		conn: conn,
 		subs: makeSubscriptions(p),
 
-		closed:         make(chan struct{}),
-		retrySend:      make(chan struct{}, 1),
-		externalRepair: make(chan struct{}, 1),
+		exists: make(chan struct{}),
+		closed: make(chan struct{}),
 
 		closeWork: closeWork,
 		repairer:  repairer,
 	}
+
+	if p.conn != nil {
+		close(p.exists)
+	}
+
 	return p
 }

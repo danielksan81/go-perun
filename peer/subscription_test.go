@@ -20,13 +20,15 @@ func TestSubscriptions(t *testing.T) {
 	r2 := NewReceiver()
 	s := makeSubscriptions(peer)
 
+	pred := func(wire.Msg) bool { return true }
+
 	assert.True(t, s.isEmpty())
-	assert.NoError(t, s.add(wire.Peer, r0))
+	assert.NoError(t, s.add(pred, r0))
 	assert.False(t, s.isEmpty())
-	assert.NoError(t, s.add(wire.Peer, r1))
-	assert.NoError(t, s.add(wire.Peer, r2))
-	assert.Equal(t, len(s.subs[wire.Peer]), 3)
-	s.delete(wire.Peer, r0)
-	assert.Equal(t, len(s.subs[wire.Peer]), 2)
+	assert.NoError(t, s.add(pred, r1))
+	assert.NoError(t, s.add(pred, r2))
+	assert.Equal(t, len(s.subs), 3)
+	s.delete(r0)
+	assert.Equal(t, len(s.subs), 2)
 	assert.False(t, s.isEmpty())
 }
