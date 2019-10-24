@@ -62,7 +62,7 @@ func (r *Registry) Get(addr Address) *Peer {
 
 	// Dial the peer in the background.
 	go func() {
-		conn, err := r.repairer.Dial(context.TODO(), addr)
+		conn, err := r.repairer.Dial(context.Background(), addr)
 		if err != nil {
 			peer.Close()
 		} else {
