@@ -10,6 +10,7 @@ import (
 	"io"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -132,6 +133,8 @@ func testPeer_Close(t *testing.T, done chan struct{}) {
 }
 
 func TestPeer_Send_ImmediateAbort(t *testing.T) {
+	t.Parallel()
+
 	setup := MakeSetup()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -143,9 +146,61 @@ func TestPeer_Send_ImmediateAbort(t *testing.T) {
 	assert.True(t, setup.alice.partner.isClosed(), "peer must be closed after failed sending")
 }
 
+func TestPeer_Send_Timeout(t *testing.T) {
+	t.Parallel()
+
+	conn, _ := newPipeConnPair()
+	p := newPeer(nil, conn, nil, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+
+	assert.Error(t, p.Send(ctx, wire.NewPingMsg()),
+		"Send() must timeout on blocked connection")
+	assert.True(t, p.isClosed(), "peer must be closed after failed Send()")
+}
+
+func TestPeer_Send_Close(t *testing.T) {
+	conn, _ := newPipeConnPair()
+	p := newPeer(nil, conn, nil, nil)
+
+	go func() {
+		<-time.NewTimer(Timeout).C
+		p.Close()
+	}()
+	assert.Error(t, p.Send(context.Background(), wire.NewPingMsg()),
+		"Send() must be aborted by Close()")
+}
+
 func TestPeer_isClosed(t *testing.T) {
 	setup := MakeSetup()
 	assert.False(t, setup.alice.partner.isClosed(), "fresh peer must be open")
 	assert.NoError(t, setup.alice.partner.Close(), "closing must succeed")
 	assert.True(t, setup.alice.partner.isClosed(), "closed peer must be closed")
+}
+
+func TestPeer_create(t *testing.T) {
+	p := newPeer(nil, nil, nil, nil)
+	select {
+	case <-p.exists:
+		t.Fatal("peer must not yet exist")
+	case <-time.NewTimer(Timeout).C:
+	}
+
+	conn, _ := newPipeConnPair()
+	p.create(conn)
+
+	select {
+	case <-p.exists:
+	default:
+		t.Fatal("peer must exist")
+	}
+
+	assert.NoError(t, conn.Close(),
+		"Peer.create() on nonexisting peers must not close the new connection")
+
+	conn2, _ := newPipeConnPair()
+	p.create(conn2)
+	assert.Error(t, conn2.Close(),
+		"Peer.create() on existing peers must close the new connection")
 }

@@ -6,6 +6,8 @@ package peer
 
 import (
 	"io"
+
+	"github.com/pkg/errors"
 )
 
 var _ io.ReadWriteCloser = (*pipeConn)(nil)
@@ -15,16 +17,23 @@ var _ io.ReadWriteCloser = (*pipeConn)(nil)
 type pipeConn struct {
 	io.ReadCloser
 	io.WriteCloser
+	closed chan struct{}
 }
 
-func (c *pipeConn) Close() error {
+func (c *pipeConn) Close() (err error) {
 	c.ReadCloser.Close()
-	return c.WriteCloser.Close()
+	c.WriteCloser.Close()
+
+	err = errors.New("already closed")
+	defer func() { recover() }()
+	close(c.closed)
+	err = nil
+	return
 }
 
 // newPipeConnPair creates endpoints that are connected via pipes.
 func newPipeConnPair() (a Conn, b Conn) {
 	ra, wa := io.Pipe()
 	rb, wb := io.Pipe()
-	return NewConn(&pipeConn{ra, wb}), NewConn(&pipeConn{rb, wa})
+	return NewConn(&pipeConn{ra, wb, make(chan struct{})}), NewConn(&pipeConn{rb, wa, make(chan struct{})})
 }
