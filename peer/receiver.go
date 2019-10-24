@@ -112,7 +112,8 @@ func (r *Receiver) Next(ctx context.Context) (*Peer, wire.Msg) {
 }
 
 // Close closes a receiver.
-// Any ongoing receiver operations will be aborted (if there are no messages in backlog).
+// Any ongoing receiver operations will be aborted (if there are no messages in
+// backlog).
 func (r *Receiver) Close() {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()

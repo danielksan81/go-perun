@@ -17,7 +17,7 @@ type Registry struct {
 	mutex sync.RWMutex
 	peers []*Peer // The list of all of the registry's peers.
 
-	repairer  Dialer      // The repairer is used by peers for repairing.
+	repairer  Dialer      // Used for dialing peers (and later: repairing).
 	subscribe func(*Peer) // Sets up peer subscriptions.
 }
 

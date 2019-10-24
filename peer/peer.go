@@ -42,7 +42,6 @@ type Peer struct {
 	closed chan struct{} // Indicates whether the peer is closed.
 
 	closeWork func(*Peer) // Work to be done when the peer is closed.
-	repairer  Dialer      // The dialer that is used to repair the connection.
 }
 
 // recvLoop continuously receives messages from a peer until it is closed.
@@ -97,7 +96,8 @@ func (p *Peer) waitExists(ctx context.Context) {
 // Send sends a single message to a peer.
 // Fails if the peer is closed via Close() or the transmission fails.
 //
-// The passed context is used to timeout the send operation.
+// The passed context is used to timeout the send operation. If the context
+// times out, the peer is closed.
 func (p *Peer) Send(ctx context.Context, m wire.Msg) error {
 	// Wait until peer exists, is closed, or context timeout.
 	p.waitExists(ctx)
@@ -171,6 +171,8 @@ func (p *Peer) Close() error {
 
 // newPeer creates a new peer from a peer address and connection.
 func newPeer(addr Address, conn Conn, closeWork func(*Peer), repairer Dialer) *Peer {
+	_ = repairer // repairer will be needed again when reintroducing repair.
+
 	// In tests, it is useful to omit the function.
 	if closeWork == nil {
 		closeWork = func(*Peer) {}
@@ -187,7 +189,6 @@ func newPeer(addr Address, conn Conn, closeWork func(*Peer), repairer Dialer) *P
 		closed: make(chan struct{}),
 
 		closeWork: closeWork,
-		repairer:  repairer,
 	}
 
 	if p.conn != nil {
