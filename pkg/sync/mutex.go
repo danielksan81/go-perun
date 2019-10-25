@@ -8,8 +8,6 @@ package sync // import "perun.network/go-perun/pkg/sync"
 import (
 	"context"
 	"sync"
-
-	"perun.network/go-perun/log"
 )
 
 // Mutex is a replacement of the standard mutex type.
@@ -31,33 +29,40 @@ func (m *Mutex) Lock() {
 	m.locked <- struct{}{}
 }
 
-// TryLock tries to lock the mutex within a timeout provided by a context.
+// TryLock tries to lock the mutex without blocking.
+// Returns whether the mutex was acquired.
+func (m *Mutex) TryLock() bool {
+	m.initOnce()
+	select {
+	case m.locked <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+// TryLockCtx tries to lock the mutex within a timeout provided by a context.
 // For an instant timeout, a nil context has to be passed. Returns whether the
 // mutex was acquired.
-func (m *Mutex) TryLock(ctx context.Context) bool {
+func (m *Mutex) TryLockCtx(ctx context.Context) bool {
 	m.initOnce()
 
-	if ctx != nil {
-		// Check for the deadline first because 'select' choses a random
-		// available case.
-		select {
-		case <-ctx.Done():
-			return false
-		default:
-		}
+	if ctx == nil {
+		return m.TryLock()
+	}
 
-		select {
-		case m.locked <- struct{}{}:
-			return true
-		case <-ctx.Done():
-			return false
-		}
+	// Check for the deadline first because 'select' choses a random
+	// available case.
+	select {
+	case <-ctx.Done():
+		return false
+	default:
 	}
 
 	select {
 	case m.locked <- struct{}{}:
 		return true
-	default:
+	case <-ctx.Done():
 		return false
 	}
 }
@@ -68,6 +73,6 @@ func (m *Mutex) Unlock() {
 	select {
 	case <-m.locked:
 	default:
-		log.Fatal("tried to unlock unlocked mutex")
+		panic("tried to unlock unlocked mutex")
 	}
 }

@@ -31,20 +31,20 @@ func TestLock(t *testing.T) {
 	}
 }
 
-// TestTryLock_Nil tests that TryLock(nil) can lock an empty mutex, and that
+// TestTryLockCtx_Nil tests that TryLock() can lock an empty mutex, and that
 // locked mutexes cannot be locked again.
-func TestTryLock_Nil(t *testing.T) {
+func TestTryLockCtx_Nil(t *testing.T) {
 	t.Parallel()
 
 	var m Mutex
 	// Try instant lock without context.
-	assert.True(t, m.TryLock(nil), "TryLock on new mutex must succeed")
-	assert.False(t, m.TryLock(nil), "TryLock(nil) on locked mutex must fail")
+	assert.True(t, m.TryLock(), "TryLock on new mutex must succeed")
+	assert.False(t, m.TryLock(), "TryLock() on locked mutex must fail")
 }
 
-// TestTryLock_DoneContext tests that a cancelled context can never be used to
+// TestTryLockCtx_DoneContext tests that a cancelled context can never be used to
 // acquire the mutex.
-func TestTryLock_DoneContext(t *testing.T) {
+func TestTryLockCtx_DoneContext(t *testing.T) {
 	t.Parallel()
 
 	var m Mutex
@@ -52,12 +52,12 @@ func TestTryLock_DoneContext(t *testing.T) {
 	cancel()
 	// Try often because of random `select` case choices.
 	for i := 0; i < 256; i++ {
-		assert.False(t, m.TryLock(ctx), "TryLock on closed context must fail")
+		assert.False(t, m.TryLockCtx(ctx), "TryLockCtx on closed context must fail")
 	}
 }
 
-// TestTryLock_WithTimeout tests that the context's timeout is properly adhered to.
-func TestTryLock_WithTimeout(t *testing.T) {
+// TestTryLockCtx_WithTimeout tests that the context's timeout is properly adhered to.
+func TestTryLockCtx_WithTimeout(t *testing.T) {
 	t.Parallel()
 
 	var m Mutex
@@ -72,19 +72,19 @@ func TestTryLock_WithTimeout(t *testing.T) {
 	}()
 	done := make(chan bool, 1)
 	go func() {
-		done <- m.TryLock(ctx)
+		done <- m.TryLockCtx(ctx)
 	}()
 
 	select {
 	case <-time.NewTimer(1000 * time.Millisecond).C:
-		t.Error("TryLock should have returned")
+		t.Error("TryLockCtx should have returned")
 	case success := <-done:
-		assert.True(t, success, "TryLock should have succeeded")
+		assert.True(t, success, "TryLockCtx should have succeeded")
 	}
 }
 
-// TestTryLock_WithTimeout_Fail tests that TryLock fails if it times out.
-func TestTryLock_WithTimeout_Fail(t *testing.T) {
+// TestTryLockCtx_WithTimeout_Fail tests that TryLockCtx fails if it times out.
+func TestTryLockCtx_WithTimeout_Fail(t *testing.T) {
 	t.Parallel()
 
 	var m Mutex
@@ -94,21 +94,21 @@ func TestTryLock_WithTimeout_Fail(t *testing.T) {
 	defer cancel()
 	done := make(chan bool, 1)
 	go func() {
-		done <- m.TryLock(ctx)
+		done <- m.TryLockCtx(ctx)
 	}()
 
 	// Check that it does not return early.
 	select {
 	case <-time.NewTimer(500 * time.Millisecond).C:
 	case success := <-done:
-		t.Errorf("TryLock should not have returned, but returned %t", success)
+		t.Errorf("TryLockCtx should not have returned, but returned %t", success)
 	}
 
 	// Check that it fails.
 	select {
 	case <-time.NewTimer(1000 * time.Millisecond).C:
 	case success := <-done:
-		assert.False(t, success, "TryLock should have timed out")
+		assert.False(t, success, "TryLockCtx should have timed out")
 	}
 }
 
@@ -119,5 +119,5 @@ func TestUnlock(t *testing.T) {
 	var m Mutex
 	m.Lock()
 	m.Unlock()
-	assert.True(t, m.TryLock(nil), "Unlock must make the next TryLock succeed")
+	assert.True(t, m.TryLock(), "Unlock must make the next TryLock succeed")
 }

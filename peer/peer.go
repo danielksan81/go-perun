@@ -104,7 +104,7 @@ func (p *Peer) Send(ctx context.Context, m wire.Msg) error {
 
 	if p.isClosed() {
 		return errors.New("peer closed")
-	} else if !p.sending.TryLock(ctx) {
+	} else if !p.sending.TryLockCtx(ctx) {
 		p.Close() // replace with p.conn.Close() when reintroducing repair.
 		return errors.New("aborted manually")
 	}

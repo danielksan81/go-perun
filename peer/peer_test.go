@@ -7,6 +7,7 @@ package peer
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"math/rand"
 	"testing"
@@ -100,23 +101,15 @@ func MakeClient(conn Conn, rng io.Reader, dialer Dialer) *Client {
 // this results in a new peer object.
 func TestPeer_Close(t *testing.T) {
 	t.Parallel()
-	t.Helper()
 
-	N := 1000
-
-	done := make(chan struct{}, N)
 	// Test it often to detect races.
-	for i := 0; i < N; i++ {
-		go testPeer_Close(t, done)
-	}
-
-	for i := 0; i < N; i++ {
-		<-done
+	for i := 0; i < 1000; i++ {
+		t.Run(fmt.Sprintf("race #%d", i), testPeer_Close)
 	}
 }
 
-func testPeer_Close(t *testing.T, done chan struct{}) {
-	defer func() { done <- struct{}{} }()
+func testPeer_Close(t *testing.T) {
+	t.Parallel()
 	setup := MakeSetup()
 	// Remember bob's address for later, we will need it for a registry lookup.
 	bobAddress := setup.alice.partner.PerunAddress
@@ -134,7 +127,6 @@ func testPeer_Close(t *testing.T, done chan struct{}) {
 
 func TestPeer_Send_ImmediateAbort(t *testing.T) {
 	t.Parallel()
-
 	setup := MakeSetup()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -147,8 +139,6 @@ func TestPeer_Send_ImmediateAbort(t *testing.T) {
 }
 
 func TestPeer_Send_Timeout(t *testing.T) {
-	t.Parallel()
-
 	conn, _ := newPipeConnPair()
 	p := newPeer(nil, conn, nil, nil)
 

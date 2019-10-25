@@ -6,6 +6,7 @@ package peer
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"sync"
 	"testing"
@@ -47,48 +48,50 @@ func (d *MockDialer) Dial(ctx context.Context, addr Address) (Conn, error) {
 
 func TestRegistry_Get(t *testing.T) {
 	t.Parallel()
-
 	for i := 0; i < 2; i++ {
-		rng := rand.New(rand.NewSource(0xb0baFEDD))
-		d := &MockDialer{dial: make(chan Conn)}
-		r := NewRegistry(func(*Peer) {}, d)
+		i := i
+		t.Run(fmt.Sprintf("subtest %d", i), func(t *testing.T) {
+			t.Parallel()
+			rng := rand.New(rand.NewSource(0xb0baFEDD))
+			d := &MockDialer{dial: make(chan Conn)}
+			r := NewRegistry(func(*Peer) {}, d)
 
-		addr := wallet.NewRandomAddress(rng)
-		p := r.Get(addr)
-		assert.NotNil(t, p, "Get() must not return nil", i)
-		assert.Equal(t, p, r.Get(addr), "Get must return the existing peer", i)
-		<-time.NewTimer(Timeout).C
-		assert.NotEqual(t, p, r.Get(wallet.NewRandomAddress(rng)),
-			"Get() must return different peers for different addresses", i)
+			addr := wallet.NewRandomAddress(rng)
+			p := r.Get(addr)
+			assert.NotNil(t, p, "Get() must not return nil", i)
+			assert.Equal(t, p, r.Get(addr), "Get must return the existing peer", i)
+			<-time.NewTimer(Timeout).C
+			assert.NotEqual(t, p, r.Get(wallet.NewRandomAddress(rng)),
+				"Get() must return different peers for different addresses", i)
 
-		select {
-		case <-p.exists:
-			t.Fatal("Peer that is still being dialed must not exist", i)
-		default:
-		}
+			select {
+			case <-p.exists:
+				t.Fatal("Peer that is still being dialed must not exist", i)
+			default:
+			}
 
-		conn, _ := newPipeConnPair()
-		if i == 0 {
-			d.dial <- conn
-		} else {
-			r.Register(addr, conn)
-		}
+			conn, _ := newPipeConnPair()
+			if i == 0 {
+				d.dial <- conn
+			} else {
+				r.Register(addr, conn)
+			}
 
-		<-time.NewTimer(Timeout).C
+			<-time.NewTimer(Timeout).C
 
-		select {
-		case <-p.exists:
-		default:
-			t.Fatal("Peer that is successfully dialed must exist", i)
-		}
+			select {
+			case <-p.exists:
+			default:
+				t.Fatal("Peer that is successfully dialed must exist", i)
+			}
 
-		assert.False(t, p.isClosed(), "Dialed peer must not be closed", i)
+			assert.False(t, p.isClosed(), "Dialed peer must not be closed", i)
+		})
 	}
 }
 
 func TestRegistry_delete(t *testing.T) {
 	t.Parallel()
-
 	rng := rand.New(rand.NewSource(0xb0baFEDD))
 	d := &MockDialer{dial: make(chan Conn)}
 	r := NewRegistry(func(*Peer) {}, d)
