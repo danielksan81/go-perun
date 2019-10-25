@@ -7,6 +7,7 @@ package peer
 import (
 	"context"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,7 +20,8 @@ import (
 var _ Dialer = (*MockDialer)(nil)
 
 type MockDialer struct {
-	dial chan Conn
+	dial  chan Conn
+	mutex sync.Mutex
 }
 
 func (d *MockDialer) Close() error {
@@ -28,6 +30,9 @@ func (d *MockDialer) Close() error {
 }
 
 func (d *MockDialer) Dial(ctx context.Context, addr Address) (Conn, error) {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+
 	select {
 	case <-ctx.Done():
 		return nil, errors.New("aborted manually")
@@ -45,13 +50,14 @@ func TestRegistry_Get(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		rng := rand.New(rand.NewSource(0xb0baFEDD))
-		d := &MockDialer{make(chan Conn)}
+		d := &MockDialer{dial: make(chan Conn)}
 		r := NewRegistry(func(*Peer) {}, d)
 
 		addr := wallet.NewRandomAddress(rng)
 		p := r.Get(addr)
 		assert.NotNil(t, p, "Get() must not return nil", i)
 		assert.Equal(t, p, r.Get(addr), "Get must return the existing peer", i)
+		<-time.NewTimer(Timeout).C
 		assert.NotEqual(t, p, r.Get(wallet.NewRandomAddress(rng)),
 			"Get() must return different peers for different addresses", i)
 
@@ -84,7 +90,7 @@ func TestRegistry_delete(t *testing.T) {
 	t.Parallel()
 
 	rng := rand.New(rand.NewSource(0xb0baFEDD))
-	d := &MockDialer{make(chan Conn)}
+	d := &MockDialer{dial: make(chan Conn)}
 	r := NewRegistry(func(*Peer) {}, d)
 
 	addr := wallet.NewRandomAddress(rng)
