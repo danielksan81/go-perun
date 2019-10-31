@@ -70,8 +70,8 @@ func Decode(reader io.Reader, values ...interface{}) (err error) {
 			d := ByteSlice(*v)
 			err = d.Decode(reader)
 		default:
-			if enc, ok := value.(pio.Decoder); ok {
-				err = enc.Decode(reader)
+			if dec, ok := value.(pio.Decoder); ok {
+				err = dec.Decode(reader)
 			} else {
 				log.Panicf("wire.Decode(): Invalid type %T", v)
 			}
