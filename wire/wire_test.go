@@ -79,12 +79,12 @@ func TestEncodeDecode(t *testing.T) {
 	for i, v := range values {
 		if b, ok := v.([]byte); ok {
 			// destination byte slice has to be of correct size
-			_d := make([]byte, len(b))
-			d[i] = &_d
+			e := make([]byte, len(b))
+			d[i] = &e
 		} else if b, ok = v.(ByteSlice); ok {
 			// destination ByteSlice has to be of correct size
-			_d := make(ByteSlice, len(b))
-			d[i] = &_d
+			e := make(ByteSlice, len(b))
+			d[i] = &e
 		} else {
 			d[i] = reflect.New(reflect.TypeOf(v)).Interface()
 		}
