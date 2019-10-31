@@ -73,7 +73,7 @@ func (s *subscriptions) put(m wire.Msg, p *Peer) {
 
 	for _, sub := range s.subs {
 		if sub.predicate(m) {
-			sub.receiver.msgs <- MsgTuple{p, m}
+			sub.receiver.msgs <- msgTuple{p, m}
 		}
 	}
 }

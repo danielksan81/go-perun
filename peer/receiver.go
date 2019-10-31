@@ -20,8 +20,8 @@ const (
 	receiverBufferSize = 16
 )
 
-// MsgTuple is a helper type, because channels cannot have tuple types.
-type MsgTuple struct {
+// msgTuple is a helper type, because channels cannot have tuple types.
+type msgTuple struct {
 	*Peer
 	wire.Msg
 }
@@ -37,8 +37,8 @@ type MsgTuple struct {
 // NextWait() will only fail if the receiver is manually closed via Close().
 type Receiver struct {
 	mutex  sync.Mutex    // Protects all fields.
-	msgs   chan MsgTuple // Queued messages.
-	closed chan struct{}
+	msgs   chan msgTuple // Queued messages.
+	closed bool
 	subs   []*Peer // The receiver's subscription list.
 }
 
@@ -48,10 +48,8 @@ func (r *Receiver) Subscribe(p *Peer, predicate func(wire.Msg) bool) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	select {
-	case <-r.closed:
+	if r.closed {
 		return errors.New("receiver is closed")
-	default:
 	}
 
 	if err := p.subs.add(predicate, r); err != nil {
@@ -70,12 +68,12 @@ func (r *Receiver) Unsubscribe(p *Peer) {
 	r.unsubscribe(p, true)
 }
 
-func (r *Receiver) unsubscribe(p *Peer, delete bool) {
+func (r *Receiver) unsubscribe(p *Peer, doDelete bool) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	for i, _p := range r.subs {
 		if _p == p {
-			if delete {
+			if doDelete {
 				p.subs.delete(r)
 			}
 			r.subs[i] = r.subs[len(r.subs)-1]
@@ -117,18 +115,19 @@ func (r *Receiver) Next(ctx context.Context) (*Peer, wire.Msg) {
 func (r *Receiver) Close() {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	// Safely close the channel.
-	func() { defer func() { recover() }(); close(r.closed) }()
-	// Remove all subscriptions.
-	r.unsubscribeAll()
-	// Close the message channel.
-	func() { defer func() { recover() }(); close(r.msgs) }()
+
+	if !r.closed {
+		r.closed = true
+		// Remove all subscriptions.
+		r.unsubscribeAll()
+		// Close the message channel.
+		close(r.msgs)
+	}
 }
 
 // NewReceiver creates a new receiver.
 func NewReceiver() *Receiver {
 	return &Receiver{
-		msgs:   make(chan MsgTuple, receiverBufferSize),
-		closed: make(chan struct{}),
+		msgs: make(chan msgTuple, receiverBufferSize),
 	}
 }

@@ -39,19 +39,18 @@ func (b *Broadcaster) Send(ctx context.Context, m wire.Msg) *BroadcastError {
 	}
 
 	// Gather results and collect errors.
-	var error BroadcastError
-	error.errors = make([]sendError, 0)
+	var broadcastError BroadcastError
 	for range b.peers {
 		err := <-gather
 		if err.err != nil {
-			error.errors = append(error.errors, err)
+			broadcastError.errors = append(broadcastError.errors, err)
 		}
 	}
 
-	if len(error.errors) == 0 {
+	if len(broadcastError.errors) == 0 {
 		return nil
 	} else {
-		return &error
+		return &broadcastError
 	}
 }
 
@@ -77,6 +76,6 @@ func (err *BroadcastError) Error() string {
 }
 
 // NewBroadcaster creates a new broadcaster instance.
-func NewBroadcaster(peers []*Peer) Broadcaster {
-	return Broadcaster{peers: peers}
+func NewBroadcaster(peers []*Peer) *Broadcaster {
+	return &Broadcaster{peers: peers}
 }

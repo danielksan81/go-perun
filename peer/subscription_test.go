@@ -31,4 +31,5 @@ func TestSubscriptions(t *testing.T) {
 	s.delete(r0)
 	assert.Equal(t, len(s.subs), 2)
 	assert.False(t, s.isEmpty())
+	assert.Panics(t, func() { s.delete(r0) })
 }

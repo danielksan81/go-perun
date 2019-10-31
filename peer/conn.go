@@ -5,8 +5,6 @@
 package peer
 
 import (
-	"github.com/pkg/errors"
-
 	wire "perun.network/go-perun/wire/msg"
 )
 
@@ -26,12 +24,4 @@ type Conn interface {
 	//
 	// Repeated calls to Close() result in an error.
 	Close() error
-}
-
-// Authenticate runs an authentication protocol on a connection.
-// The protocol exchanges Perun addresses and establishes authenticity.
-//
-// Authenticate() returns the peer's address, if successful, or an error.
-func Authenticate(id Identity, conn Conn) (Address, error) {
-	return nil, errors.New("authentication not implemented")
 }

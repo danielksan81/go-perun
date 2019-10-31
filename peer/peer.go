@@ -104,7 +104,8 @@ func (p *Peer) Send(ctx context.Context, m wire.Msg) error {
 
 	if p.isClosed() {
 		return errors.New("peer closed")
-	} else if !p.sending.TryLockCtx(ctx) {
+	}
+	if !p.sending.TryLockCtx(ctx) {
 		p.Close() // replace with p.conn.Close() when reintroducing repair.
 		return errors.New("aborted manually")
 	}
@@ -170,8 +171,7 @@ func (p *Peer) Close() error {
 }
 
 // newPeer creates a new peer from a peer address and connection.
-func newPeer(addr Address, conn Conn, closeWork func(*Peer), repairer Dialer) *Peer {
-	_ = repairer // repairer will be needed again when reintroducing repair.
+func newPeer(addr Address, conn Conn, closeWork func(*Peer), _ Dialer) *Peer {
 
 	// In tests, it is useful to omit the function.
 	if closeWork == nil {

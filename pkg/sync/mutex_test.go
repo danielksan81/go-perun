@@ -12,8 +12,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestLock tests that an empty mutex can be locked.
-func TestLock(t *testing.T) {
+const timeout = 200 * time.Millisecond
+
+// TestMutex_Lock tests that an empty mutex can be locked.
+func TestMutex_Lock(t *testing.T) {
 	t.Parallel()
 
 	var m Mutex
@@ -26,25 +28,38 @@ func TestLock(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.NewTimer(500 * time.Millisecond).C:
+		assert.NotPanics(t, func() { m.Unlock() }, "Unlock must succeed")
+	case <-time.NewTimer(timeout).C:
 		t.Error("lock on new mutex did not instantly succeed")
 	}
 }
 
-// TestTryLockCtx_Nil tests that TryLock() can lock an empty mutex, and that
+// TestMutex_TryLock tests that TryLock() can lock an empty mutex, and that
 // locked mutexes cannot be locked again.
-func TestTryLockCtx_Nil(t *testing.T) {
+func TestMutex_TryLock(t *testing.T) {
 	t.Parallel()
 
 	var m Mutex
 	// Try instant lock without context.
-	assert.True(t, m.TryLock(), "TryLock on new mutex must succeed")
+	assert.True(t, m.TryLock(), "TryLock() on new mutex must succeed")
 	assert.False(t, m.TryLock(), "TryLock() on locked mutex must fail")
+	assert.NotPanics(t, func() { m.Unlock() }, "Unlock must succeed")
 }
 
-// TestTryLockCtx_DoneContext tests that a cancelled context can never be used to
-// acquire the mutex.
-func TestTryLockCtx_DoneContext(t *testing.T) {
+// TestMutex_TryLockCtx_Nil tests that TryLockCtx(nil) behaves like TryLock().
+func TestMutex_TryLockCtx_Nil(t *testing.T) {
+	t.Parallel()
+
+	var m Mutex
+	// Try instant lock without context.
+	assert.True(t, m.TryLockCtx(nil), "TryLock() on new mutex must succeed")
+	assert.False(t, m.TryLockCtx(nil), "TryLock() on locked mutex must fail")
+	assert.NotPanics(t, func() { m.Unlock() }, "Unlock must succeed")
+}
+
+// TestMutex_TryLockCtx_DoneContext tests that a cancelled context can never be
+// used to acquire the mutex.
+func TestMutex_TryLockCtx_DoneContext(t *testing.T) {
 	t.Parallel()
 
 	var m Mutex
@@ -56,68 +71,73 @@ func TestTryLockCtx_DoneContext(t *testing.T) {
 	}
 }
 
-// TestTryLockCtx_WithTimeout tests that the context's timeout is properly adhered to.
-func TestTryLockCtx_WithTimeout(t *testing.T) {
+// TestMutex_TryLockCtx_WithTimeout tests that the context's timeout is
+// properly adhered to.
+func TestMutex_TryLockCtx_WithTimeout(t *testing.T) {
 	t.Parallel()
-
-	var m Mutex
-	m.Lock()
-	// Try delayed lock with timeout.
-	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-	defer cancel()
-
-	go func() {
-		<-time.NewTimer(500 * time.Millisecond).C
-		m.Unlock()
-	}()
-	done := make(chan bool, 1)
-	go func() {
-		done <- m.TryLockCtx(ctx)
-	}()
-
-	select {
-	case <-time.NewTimer(1000 * time.Millisecond).C:
-		t.Error("TryLockCtx should have returned")
-	case success := <-done:
-		assert.True(t, success, "TryLockCtx should have succeeded")
-	}
+	testMutex_TryLockCtx(t, 1, 2, true)
 }
 
-// TestTryLockCtx_WithTimeout_Fail tests that TryLockCtx fails if it times out.
-func TestTryLockCtx_WithTimeout_Fail(t *testing.T) {
+// TestMutex_TryLockCtx_WithTimeout_Fail tests that TryLockCtx fails if it
+// times out.
+func TestMutex_TryLockCtx_WithTimeout_Fail(t *testing.T) {
 	t.Parallel()
+	testMutex_TryLockCtx(t, 2, 1, false)
+}
+
+func testMutex_TryLockCtx(
+	t *testing.T,
+	unlockDelay time.Duration,
+	lockTimeout time.Duration,
+	expectSuccess bool) {
+
+	t.Helper()
+	unlockDelay *= timeout
+	lockTimeout *= timeout
 
 	var m Mutex
 	m.Lock()
-	// Try delayed lock with timeout.
-	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(context.Background(), lockTimeout)
 	defer cancel()
 	done := make(chan bool, 1)
+	go func() { done <- m.TryLockCtx(ctx) }()
 	go func() {
-		done <- m.TryLockCtx(ctx)
+		<-time.NewTimer(unlockDelay).C
+		m.Unlock()
 	}()
 
 	// Check that it does not return early.
 	select {
-	case <-time.NewTimer(500 * time.Millisecond).C:
+	case <-time.NewTimer(unlockDelay / 2).C:
 	case success := <-done:
-		t.Errorf("TryLockCtx should not have returned, but returned %t", success)
+		assert.False(t, expectSuccess,
+			"TryLockCtx should not have returned before unlocking")
+		assert.False(t, success, "TryLockCtx should have failed")
 	}
 
-	// Check that it fails.
+	// Check result.
 	select {
-	case <-time.NewTimer(1000 * time.Millisecond).C:
+	case <-ctx.Done():
+		assert.False(t, expectSuccess, "TryLockCtx was not supposed to time out")
 	case success := <-done:
-		assert.False(t, success, "TryLockCtx should have timed out")
+		if expectSuccess {
+			assert.True(t, success, "TryLockCtx should have succeeded")
+		} else {
+			assert.False(t, success, "TryLockCtx should have failed")
+		}
 	}
 }
 
-// TestUnlock tests that unlocking a locked mutex will make it lockable again.
-func TestUnlock(t *testing.T) {
+// TestMutex_Unlock tests that unlocking a locked mutex will make it lockable
+// again.
+func TestMutex_Unlock(t *testing.T) {
 	t.Parallel()
 
 	var m Mutex
+	assert.Panics(t, func() { m.Unlock() }, "uninitialized Unlock must panic")
 	m.Lock()
-	m.Unlock()
+	assert.NotPanics(t, func() { m.Unlock() }, "Unlock must succeed")
+	assert.Panics(t, func() { m.Unlock() }, "double Unlock must panic")
 	assert.True(t, m.TryLock(), "Unlock must make the next TryLock succeed")
 }

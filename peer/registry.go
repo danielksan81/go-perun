@@ -17,17 +17,17 @@ type Registry struct {
 	mutex sync.RWMutex
 	peers []*Peer // The list of all of the registry's peers.
 
-	repairer  Dialer      // Used for dialing peers (and later: repairing).
+	dialer    Dialer      // Used for dialing peers (and later: repairing).
 	subscribe func(*Peer) // Sets up peer subscriptions.
 }
 
 // NewRegistry creates a new registry.
 // The provided callback is used to set up new peer's subscriptions and it is
 // called before the peer starts receiving messages.
-func NewRegistry(subscribe func(*Peer), repairer Dialer) *Registry {
+func NewRegistry(subscribe func(*Peer), dialer Dialer) *Registry {
 	return &Registry{
 		subscribe: subscribe,
-		repairer:  repairer,
+		dialer:    dialer,
 	}
 }
 
@@ -62,7 +62,7 @@ func (r *Registry) Get(addr Address) *Peer {
 
 	// Dial the peer in the background.
 	go func() {
-		conn, err := r.repairer.Dial(context.Background(), addr)
+		conn, err := r.dialer.Dial(context.Background(), addr)
 		if err != nil {
 			peer.Close()
 		} else {
@@ -73,26 +73,24 @@ func (r *Registry) Get(addr Address) *Peer {
 }
 
 // Register registers a peer in the registry.
-// If a peer with the same perun address already existed, returns that peer.
-// Otherwise, enters the new peer into the registry.
+// If a peer with the same perun address already exists, it is returned,
+// initialized with the given connection, if it did not already have a
+// connection. Otherwise, enters a new peer into the registry and returns it.
 func (r *Registry) Register(addr Address, conn Conn) (peer *Peer) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
 	if peer, _ = r.find(addr); peer == nil {
-		peer = r.addPeer(addr, conn)
-	} else {
-		peer.create(conn)
-		return peer
+		return r.addPeer(addr, conn)
 	}
-
-	return
+	peer.create(conn)
+	return peer
 }
 
 // addPeer adds a new peer to the registry.
 func (r *Registry) addPeer(addr Address, conn Conn) *Peer {
 	// Create and register a new peer.
-	peer := newPeer(addr, conn, func(p *Peer) { r.delete(p) }, r.repairer)
+	peer := newPeer(addr, conn, func(p *Peer) { r.delete(p) }, r.dialer)
 	r.peers = append(r.peers, peer)
 	// Setup the peer's subscriptions.
 	r.subscribe(peer)

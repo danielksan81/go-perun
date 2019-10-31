@@ -14,15 +14,14 @@ import (
 	wire "perun.network/go-perun/wire/msg"
 )
 
-// Timeout controls how long to wait until we decide that something will never
+// timeout controls how long to wait until we decide that something will never
 // happen.
-const Timeout = 750 * time.Millisecond
+const timeout = 200 * time.Millisecond
 
 func TestNewReceiver(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, len(NewReceiver().subs), 0,
-		"fresh receivers must be empty")
+	assert.Zero(t, len(NewReceiver().subs), "fresh receivers must be empty")
 }
 
 func pred(wire.Msg) bool { return true }
@@ -33,17 +32,17 @@ func TestReceiver_Subscribe(t *testing.T) {
 	r := NewReceiver()
 	p := newPeer(nil, nil, nil, nil)
 
-	assert.Equal(t, len(r.subs), 0, "receiver must be empty")
+	assert.Zero(t, len(r.subs), "receiver must be empty")
 	assert.NoError(t, r.Subscribe(p, pred), "first subscribe must not fail")
 	assert.Equal(t, len(r.subs), 1, "receiver must not be empty")
 	assert.Panics(t, func() { r.Subscribe(p, pred) }, "double subscription must panic")
 	assert.NotPanics(t, func() { r.Unsubscribe(p) }, "first unsubscribe must not panic")
 	assert.Panics(t, func() { r.Unsubscribe(p) }, "double unsubscribe must panic")
-	assert.Equal(t, len(r.subs), 0, "receiver must be empty")
+	assert.Zero(t, len(r.subs), "receiver must be empty")
 	assert.NoError(t, r.Subscribe(p, pred), "subscribe on empty must not fail")
 	assert.Equal(t, len(r.subs), 1, "receiver must not be empty")
 	r.UnsubscribeAll()
-	assert.Equal(t, len(r.subs), 0, "receiver must be empty")
+	assert.Zero(t, len(r.subs), "receiver must be empty")
 
 	close(p.closed) // Manual close needed here.
 	assert.Error(t, r.Subscribe(p, pred), "subscription on closed peer must fail")
@@ -67,10 +66,10 @@ func TestReceiver_Next(t *testing.T) {
 
 	out.Send(wire.NewPingMsg())
 	// Ensure that the peer received the message.
-	<-time.NewTimer(Timeout).C
+	<-time.NewTimer(timeout).C
 
 	r.Subscribe(p, pred)
-	ctx, cancel = context.WithTimeout(context.Background(), Timeout)
+	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	peer, msg = r.Next(ctx)
 	assert.Nil(t, msg, "messages received before subscribing must not appear.")
 	assert.Nil(t, peer, "messages received before subscribing must not appear.")
@@ -78,15 +77,15 @@ func TestReceiver_Next(t *testing.T) {
 
 	out.Send(wire.NewPongMsg())
 	// The new message must appear.
-	ctx, cancel = context.WithTimeout(context.Background(), Timeout)
+	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	peer, msg = r.Next(ctx)
 	assert.Equal(t, peer, p, "message must come from the subscribed peer")
-	assert.NotNil(t, msg.(*wire.PongMsg), "received message must be PongMsg")
+	assert.IsType(t, &wire.PongMsg{}, msg, "received message must be PongMsg")
 	cancel()
 
 	// This will trigger in the middle of the next test.
 	go func() {
-		<-time.NewTimer(Timeout).C
+		<-time.NewTimer(timeout).C
 		r.Close()
 	}()
 
@@ -100,7 +99,7 @@ func TestReceiver_Next(t *testing.T) {
 
 	select {
 	case <-doneTest:
-	case <-time.NewTimer(Timeout * 2).C:
-		t.Fatal("Next() was not aborted by Receiver.Close()")
+	case <-time.NewTimer(timeout * 2).C:
+		t.Error("Next() was not aborted by Receiver.Close()")
 	}
 }
