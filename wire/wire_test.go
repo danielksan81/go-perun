@@ -68,6 +68,7 @@ func TestEncodeDecode(t *testing.T) {
 		longInt,
 		byte32,
 		byteSlice,
+		ByteSlice{5, 6, 8, 3, 4, 5, 6},
 	}
 
 	go func() {
@@ -79,6 +80,10 @@ func TestEncodeDecode(t *testing.T) {
 		if b, ok := v.([]byte); ok {
 			// destination byte slice has to be of correct size
 			_d := make([]byte, len(b))
+			d[i] = &_d
+		} else if b, ok = v.(ByteSlice); ok {
+			// destination ByteSlice has to be of correct size
+			_d := make(ByteSlice, len(b))
 			d[i] = &_d
 		} else {
 			d[i] = reflect.New(reflect.TypeOf(v)).Interface()
