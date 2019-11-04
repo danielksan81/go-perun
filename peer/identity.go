@@ -25,12 +25,16 @@ type Identity = wallet.Account
 // Authenticate() returns the peer's address, if successful, or an error.
 func Authenticate(id Identity, conn Conn) (Address, error) {
 	sent := make(chan error, 1)
+	if id == nil || conn == nil {
+		// catch a nil id early to not cause a panic in the following go routine
+		panic("Authenticate(): nil Identity or Conn")
+	}
 	go func() { sent <- conn.Send(NewAuthResponseMsg(id)) }()
 
 	if m, err := conn.Recv(); err != nil {
 		return nil, errors.WithMessage(err, "Failed to receive message")
 	} else if addrM, ok := m.(*AuthResponseMsg); !ok {
-		return nil, errors.WithMessagef(err, "Expected AuthResponse wire msg, got %t", m.Type())
+		return nil, errors.WithMessagef(err, "Expected AuthResponse wire msg, got %v", m.Type())
 	} else {
 		err := <-sent // Wait until the message was sent.
 		return addrM.Address, err
