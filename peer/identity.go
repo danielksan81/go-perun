@@ -13,6 +13,14 @@ import (
 	"perun.network/go-perun/wire/msg"
 )
 
+func init() {
+	msg.RegisterDecoder(msg.AuthResponse,
+		func(r io.Reader) (msg.Msg, error) {
+			var m AuthResponseMsg
+			return &m, m.Decode(r)
+		})
+}
+
 // Identity is a node's permanent Perun identity, which is used to establish
 // authenticity within the Perun peer-to-peer network. For now, it is just a
 // stub.
