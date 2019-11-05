@@ -6,6 +6,8 @@ package peer
 
 import (
 	"math/rand"
+	"net"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -31,4 +33,47 @@ func TestAuthenticate_NilParams(t *testing.T) {
 	assert.Panics(t, func() {
 		Authenticate(sim.NewRandomAccount(rnd), nil)
 	})
+}
+
+type exchangeAddressesConn struct {
+	net.Conn
+}
+
+func (e *exchangeAddressesConn) Send(m msg.Msg) error {
+	return msg.Encode(m, e.Conn)
+}
+
+func (e *exchangeAddressesConn) Recv() (msg.Msg, error) {
+	return msg.Decode(e.Conn)
+}
+
+func (e *exchangeAddressesConn) Close() error {
+	return e.Conn.Close()
+}
+
+func TestExchangeAddresses_Success(t *testing.T) {
+	rng := rand.New(rand.NewSource(0xfedd))
+	conn0, conn1 := net.Pipe()
+	account0 := sim.NewRandomAccount(rng)
+	account1 := sim.NewRandomAccount(rng)
+	waitGroup := new(sync.WaitGroup)
+
+	defer conn0.Close()
+
+	waitGroup.Add(1)
+
+	go func() {
+		defer waitGroup.Done()
+		defer conn1.Close()
+
+		receivedAddr, err := Authenticate(account1, &exchangeAddressesConn{conn1})
+		assert.NoError(t, err)
+		assert.Equal(t, receivedAddr, account0.Address())
+	}()
+
+	receivedAddr, err := Authenticate(account0, &exchangeAddressesConn{conn0})
+	assert.NoError(t, err)
+	assert.Equal(t, receivedAddr, account1.Address())
+
+	waitGroup.Wait()
 }
