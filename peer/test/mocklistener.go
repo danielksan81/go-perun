@@ -15,7 +15,7 @@ import (
 var _ peer.Listener = (*MockListener)(nil)
 
 // MockListener is a mocked listener that can be used to control and examine a
-// listener. Accept() calls can be manually controll via Put(). Accepted()
+// listener. Accept() calls can be manually controlled via Put(). Accepted()
 // tracks the number of accepted connections. IsClosed() can be used to detect
 // whether a MockListener is still open.
 type MockListener struct {
@@ -34,7 +34,8 @@ func NewMockListener() *MockListener {
 	}
 }
 
-// Accept returns the next connection that is enqueued via Put().
+// Accept returns the next connection that is enqueued via Put(). This function
+// blocks until either Put() is called or until the listener is closed.
 func (m *MockListener) Accept() (peer.Conn, error) {
 	if m.IsClosed() {
 		return nil, errors.New("listener closed")
@@ -71,8 +72,8 @@ func (m *MockListener) IsClosed() bool {
 }
 
 // Put enqueues one connection to be returned by Accept().
-// If the listener is already closed, does nothing. Blocks until either
-// Accept() is called, or until the listener is closed.
+// If the listener is already closed, does nothing. This function blocks until
+// either Accept() is called or until the listener is closed.
 //
 // Note that if Put() is called in parallel, there is no ordering guarantee for
 // the accepted connections.
