@@ -38,7 +38,7 @@ func TestMockListener_Accept_Put(t *testing.T) {
 			assert.NoError(t, err, "Accept must not fail")
 			assert.Same(t, connection, conn,
 				"Accept must receive connection from Put")
-			assert.Equal(t, 1, l.Accepted(),
+			assert.Equal(t, 1, l.NumAccepted(),
 				"Accept must track accepted connections")
 		})
 	})
@@ -60,7 +60,7 @@ func TestMockListener_Accept_Close(t *testing.T) {
 			conn, err := l.Accept()
 			assert.Error(t, err, "Accept must fail")
 			assert.Nil(t, conn)
-			assert.Zero(t, l.Accepted())
+			assert.Zero(t, l.NumAccepted())
 		})
 	})
 	t.Run("close during accept", func(t *testing.T) {
@@ -75,7 +75,7 @@ func TestMockListener_Accept_Close(t *testing.T) {
 			conn, err := l.Accept()
 			assert.Error(t, err, "Accept must fail")
 			assert.Nil(t, conn)
-			assert.Zero(t, l.Accepted())
+			assert.Zero(t, l.NumAccepted())
 		})
 	})
 }
@@ -103,7 +103,7 @@ func TestMockListener_Put(t *testing.T) {
 			conn, err := l.Accept()
 			assert.Nil(t, conn)
 			assert.Error(t, err)
-			assert.Zero(t, l.Accepted())
+			assert.Zero(t, l.NumAccepted())
 		})
 	})
 }

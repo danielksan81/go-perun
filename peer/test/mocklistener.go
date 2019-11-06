@@ -85,9 +85,9 @@ func (m *MockListener) Put(conn peer.Conn) {
 	}
 }
 
-// Accepted returns the number of connections that have been accepted by the
+// NumAccepted returns the number of connections that have been accepted by the
 // listener. Note that this number is updated before Accept() returns, but not
 // necessarily before Put() returns.
-func (m *MockListener) Accepted() int {
+func (m *MockListener) NumAccepted() int {
 	return int(atomic.LoadInt32(&m.accepted))
 }
