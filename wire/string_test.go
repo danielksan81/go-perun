@@ -10,6 +10,7 @@ import (
 	"io"
 	"math"
 	"math/rand"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,19 +27,28 @@ func TestEncodeDecodeString(t *testing.T) {
 	t.Run("valid strings", func(t *testing.T) {
 		ss := []string{"", "a", "perun", string(uint8buf), string(uint16buf)}
 
-		r, w := io.Pipe()
-		defer r.Close()
-		go func() {
-			defer w.Close()
-			for _, s := range ss {
-				assert.NoError(encodeString(w, s))
-			}
-		}()
-
 		for _, s := range ss {
-			var d string
-			assert.NoError(decodeString(r, &d))
-			assert.Equal(s, d)
+			waitGroup := new(sync.WaitGroup)
+			r, w := io.Pipe()
+
+			waitGroup.Add(2)
+
+			go func() {
+				defer waitGroup.Done()
+				defer w.Close()
+				assert.NoError(encodeString(w, s))
+			}()
+
+			go func() {
+				defer waitGroup.Done()
+				defer r.Close()
+
+				var d string
+				assert.NoError(decodeString(r, &d))
+				assert.Equal(s, d)
+			}()
+
+			waitGroup.Wait()
 		}
 	})
 
