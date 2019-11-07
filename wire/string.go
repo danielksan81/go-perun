@@ -22,6 +22,12 @@ func encodeString(w io.Writer, s string) error {
 		return errors.Wrap(err, "failed to write string length")
 	}
 
+	// io.WriteString will complain about a closed io.Writer even if there is
+	// nothing left to write
+	if l == 0 {
+		return nil
+	}
+
 	_, err := io.WriteString(w, s)
 	return errors.Wrap(err, "failed to write string")
 }
