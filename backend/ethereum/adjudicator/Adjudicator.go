@@ -199,36 +199,7 @@ func (_Adjudicator *AdjudicatorTransactorRaw) Transact(opts *bind.TransactOpts, 
 	return _Adjudicator.Contract.contract.Transact(opts, method, params...)
 }
 
-// Struct2 is an auto generated low-level Go binding around an user-defined struct.
-type Struct2 struct {
-	Assets   []common.Address
-	Balances [][]*big.Int
-	Locked   []Struct1
-}
-
-// Struct1 is an auto generated low-level Go binding around an user-defined struct.
-type Struct1 struct {
-	ID       [32]byte
-	Balances []*big.Int
-}
-
-// Struct3 is an auto generated low-level Go binding around an user-defined struct.
-type Struct3 struct {
-	ChannelID [32]byte
-	MoverIdx  uint64
-	Version   uint64
-	Outcome   Struct2
-	AppData   []byte
-	IsFinal   bool
-}
-
-// Struct0 is an auto generated low-level Go binding around an user-defined struct.
-type Struct0 struct {
-	ChallengeDuration *big.Int
-	Nonce             *big.Int
-	App               common.Address
-	Participants      []common.Address
-}
+ 
 
 // DisputeRegistry is a free data retrieval call binding the contract method 0x0a4f3e26.
 //
