@@ -187,3 +187,24 @@ func TestPeer_create(t *testing.T) {
 	assert.True(t, conn2.closed,
 		"Peer.create() on existing peers must close the new connection")
 }
+
+func TestPeer_closeWork(t *testing.T) {
+	eofReceived := make(chan struct{})
+	closeWorkCalled := new(bool)
+
+	rng := rand.New(rand.NewSource(0xcaffe2))
+	addr := wallet.NewRandomAddress(rng)
+	conn0, conn1 := newPipeConnPair()
+	peer := newPeer(addr, conn0, func(*Peer) { *closeWorkCalled = true }, nil)
+
+	go func() {
+		peer.recvLoop()
+		close(eofReceived)
+	}()
+
+	conn1.Close()
+	<-eofReceived
+
+	assert.True(t, peer.isClosed())
+	assert.True(t, *closeWorkCalled)
+}
