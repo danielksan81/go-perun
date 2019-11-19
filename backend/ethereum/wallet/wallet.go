@@ -146,3 +146,8 @@ func (w *Wallet) Lock() error {
 	}
 	return nil
 }
+
+// KeyStore returns the ethereum keystore of this wallet.
+func (w *Wallet) KeyStore() *keystore.KeyStore {
+	return w.ks
+}
