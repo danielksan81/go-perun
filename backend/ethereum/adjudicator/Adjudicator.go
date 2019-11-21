@@ -199,8 +199,6 @@ func (_Adjudicator *AdjudicatorTransactorRaw) Transact(opts *bind.TransactOpts, 
 	return _Adjudicator.Contract.contract.Transact(opts, method, params...)
 }
 
- 
-
 // DisputeRegistry is a free data retrieval call binding the contract method 0x0a4f3e26.
 //
 // Solidity: function disputeRegistry(bytes32 ) constant returns(bytes32)

@@ -1,3 +1,4 @@
+
 // Struct2 is an auto generated low-level Go binding around an user-defined struct.
 type Struct2 struct {
 	Assets   []common.Address
