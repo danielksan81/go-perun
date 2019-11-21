@@ -60,6 +60,9 @@ func (f *Funder) ConnectToClient(url string) (err error) {
 func (f *Funder) Fund(context context.Context, request channel.FundingReq) error {
 	f.context = context
 
+	if request.Params == nil || request.Allocation == nil {
+		return errors.New("Invalid funding request")
+	}
 	var channelID = request.Params.ID()
 	log.Debugf("Funding Channel with ChannelID %d", channelID)
 

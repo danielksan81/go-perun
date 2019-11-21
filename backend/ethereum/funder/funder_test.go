@@ -16,6 +16,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"perun.network/go-perun/backend/ethereum/wallet"
+	"perun.network/go-perun/channel"
+	"perun.network/go-perun/channel/test"
 	perunio "perun.network/go-perun/pkg/io"
 	perunwallet "perun.network/go-perun/wallet"
 )
@@ -118,21 +120,15 @@ func TestFunder_NewTransactor(t *testing.T) {
 	_, err = f.newTransactor(big.NewInt(0), 1000)
 	assert.Error(t, err, "Creating Transactor without valid keystore should fail")
 	// Set KeyStore
-	wall := new(wallet.Wallet)
-	wall.Connect(keyDir, password)
-	acc := wall.Accounts()[0].(*wallet.Account)
-	acc.Unlock(password)
-	ks := wall.KeyStore()
-	f.ks = ks
-	f.account = acc.Account
+	f = newFunder()
 	transactor, err := f.newTransactor(big.NewInt(0), 1000)
 	assert.NoError(t, err, "Creating Transactor should succeed")
-	assert.Equal(t, acc.Account.Address, transactor.From, "Transactor address not properly set")
+	assert.Equal(t, f.account.Address, transactor.From, "Transactor address not properly set")
 	assert.Equal(t, uint64(1000), transactor.GasLimit, "Gas limit not set properly")
 	assert.Equal(t, big.NewInt(0), transactor.Value, "Transaction value not set properly")
 	transactor, err = f.newTransactor(big.NewInt(12345), 12345)
 	assert.NoError(t, err, "Creating Transactor should succeed")
-	assert.Equal(t, acc.Account.Address, transactor.From, "Transactor address not properly set")
+	assert.Equal(t, f.account.Address, transactor.From, "Transactor address not properly set")
 	assert.Equal(t, uint64(12345), transactor.GasLimit, "Gas limit not set properly")
 	assert.Equal(t, big.NewInt(12345), transactor.Value, "Transaction value not set properly")
 }
@@ -146,4 +142,41 @@ func TestFunder_NewWatchOpts(t *testing.T) {
 	watchOpts = f.newWatchOpts(123)
 	assert.Equal(t, context.Background(), watchOpts.Context, "Creating watchopts with context should succeed")
 	assert.Equal(t, uint64(123), *watchOpts.Start, "Creating watchopts with no context should succeed")
+}
+
+func TestFunder_Fund(t *testing.T) {
+	f := newFunder()
+	assert.Error(t, f.Fund(context.Background(), channel.FundingReq{}), "Funding with invalid funding req should fail")
+	req := channel.FundingReq{
+		Params:     &channel.Params{},
+		Allocation: &channel.Allocation{},
+		Idx:        0,
+	}
+	assert.NoError(t, f.Fund(context.Background(), req), "Funding with no assets should succeed")
+	parts := []perunwallet.Address{
+		&wallet.Address{Address: f.account.Address},
+		&wallet.Address{Address: f.account.Address},
+	}
+	params, err := channel.NewParams(10, parts, new(test.NoApp), big.NewInt(0))
+	assert.NoError(t, err, "New Params should not throw error")
+	req = channel.FundingReq{
+		Params:     params,
+		Allocation: &channel.Allocation{},
+		Idx:        0,
+	}
+}
+
+func newFunder() *Funder {
+	f := &Funder{}
+	f.context = context.Background()
+	// Set KeyStore
+	wall := new(wallet.Wallet)
+	wall.Connect(keyDir, password)
+	acc := wall.Accounts()[0].(*wallet.Account)
+	acc.Unlock(password)
+	ks := wall.KeyStore()
+	f.ks = ks
+	f.account = acc.Account
+	f.ConnectToClient(nodeURL)
+	return f
 }
