@@ -27,7 +27,7 @@ func New(id peer.Identity, dialer peer.Dialer, propHandler ProposalHandler) *Cli
 	c := &Client{
 		id:          id,
 		propHandler: propHandler,
-		log:         log.WithField("client", id.Address),
+		log:         log.WithField("client", id.Address()),
 	}
 	c.peers = peer.NewRegistry(c.subscribePeer, dialer)
 	return c
