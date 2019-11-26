@@ -106,8 +106,8 @@ func (r *Registry) Register(addr Address, conn Conn) (peer *Peer) {
 // NumPeers returns the current number of peers in the registry including
 // placeholder peers (cf. Registry.Get).
 func (r *Registry) NumPeers() int {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
 
 	return len(r.peers)
 }
@@ -116,8 +116,8 @@ func (r *Registry) NumPeers() int {
 // registry. The function does not differentiate between regular and
 // placeholder peers.
 func (r *Registry) Has(addr Address) bool {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
 
 	p, _ := r.find(addr)
 
