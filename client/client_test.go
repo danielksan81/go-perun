@@ -310,6 +310,8 @@ func TestClient_Multiplexing(t *testing.T) {
 			"Client %d missing identity of client 0", i+1)
 	}
 
+	assert.Equal(clients[0].peers.NumPeers(), numClients-1)
+
 	// close connections
 	hostBarrier.Add(numClients)
 	peerBarrier.Add(numClients)
@@ -326,6 +328,10 @@ func TestClient_Multiplexing(t *testing.T) {
 			peerBarrier.Wait()
 			time.Sleep(sleepTime * time.Millisecond)
 
+			if index == 0 {
+				return
+			}
+
 			var p *peer.Peer
 			if index < numClients/2 {
 				p = clients[0].peers.Get(identities[index].Address())
@@ -337,11 +343,12 @@ func TestClient_Multiplexing(t *testing.T) {
 	}
 
 	hostBarrier.Wait()
-
 	time.Sleep(10 * time.Millisecond)
 
-	for _, c := range clients {
-		assert.Equal(0, c.peers.NumPeers())
+	for i, c := range clients {
+		assert.Equal(
+			0, c.peers.NumPeers(),
+			"Client %d has an unexpected number of peers", i)
 		assert.NoError(c.Close())
 	}
 }
