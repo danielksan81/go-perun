@@ -19,6 +19,7 @@ import (
 	_ "perun.network/go-perun/backend/sim/channel" // backend init
 	"perun.network/go-perun/backend/sim/wallet"
 	"perun.network/go-perun/peer"
+	peertest "perun.network/go-perun/peer/test"
 	wire "perun.network/go-perun/wire/msg"
 )
 
@@ -241,6 +242,93 @@ func TestClient_AuthResponseMsg(t *testing.T) {
 
 	p := c.peers.Get(peerId.Address())
 	assert.NoError(p.Close())
-	time.Sleep(10 * time.Millisecond)
 	assert.Equal(0, c.peers.NumPeers())
+}
+
+func TestClient_Multiplexing(t *testing.T) {
+	assert := assert.New(t)
+
+	// the random sleep times are needed to make concurrency-related issues
+	// appear more frequently
+	// Consequently, the RNG must be seeded externally.
+
+	const numClients = 3
+	rng := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
+	connHub := new(peertest.ConnHub)
+	identities := make([]peer.Identity, numClients)
+	dialers := make([]peer.Dialer, numClients)
+	listeners := make([]peer.Listener, numClients)
+	clients := make([]*Client, numClients)
+	hostBarrier := new(sync.WaitGroup)
+	peerBarrier := new(sync.WaitGroup)
+
+	hostBarrier.Add(numClients)
+	peerBarrier.Add(numClients)
+
+	for i := 0; i < numClients; i++ {
+		index := i // avoid false sharing
+		id := wallet.NewRandomAccount(rng)
+		dialer, listener, err := connHub.Create(id)
+		assert.NoError(err)
+
+		identities[index] = id
+		dialers[index] = dialer
+		listeners[index] = listener
+		clients[index] = New(id, dialer, new(DummyProposalHandler))
+
+		sleepTime := time.Duration(rand.Int63n(10) + 1)
+
+		go func() {
+			defer hostBarrier.Done()
+
+			peerBarrier.Done()
+			peerBarrier.Wait()
+			time.Sleep(sleepTime * time.Millisecond)
+
+			go clients[index].Listen(listeners[index])
+
+			if index == 0 {
+				return
+			}
+
+			registry := clients[index].peers
+			_ = registry.Get(identities[0].Address())
+		}()
+	}
+
+	hostBarrier.Wait()
+
+	for clients[0].peers.NumPeers() != numClients-1 {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	for i, id := range identities[1:] {
+		assert.True(
+			clients[0].peers.Has(id.Address()),
+			"Identity of client %d unknown to client 0", i+1)
+		assert.True(
+			clients[i+1].peers.Has(identities[0].Address()),
+			"Client %d missing identity of client 0", i+1)
+	}
+
+	// close connections
+	hostBarrier.Add(numClients)
+	peerBarrier.Add(numClients)
+
+	for _, c := range clients {
+		// avoid false sharing
+		client := c
+		sleepTime := time.Duration(rand.Int63n(10) + 1)
+		go func() {
+			defer hostBarrier.Done()
+
+			peerBarrier.Done()
+			peerBarrier.Wait()
+			time.Sleep(sleepTime * time.Millisecond)
+
+			assert.NoError(client.Close())
+		}()
+	}
+
+	hostBarrier.Wait()
 }
