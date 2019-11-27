@@ -162,6 +162,7 @@ func TestClient_NoAuthResponseMsg(t *testing.T) {
 
 	assert.NotNil(c)
 	assert.NotNil(c.peers)
+	assert.Equal(0, c.peers.NumPeers())
 	assert.Equal(c.propHandler, proposalHandler)
 	assert.False(c.closed.IsSet())
 
@@ -177,6 +178,7 @@ func TestClient_NoAuthResponseMsg(t *testing.T) {
 		assert.NoError(err)
 	}
 
+	assert.Equal(0, c.peers.NumPeers())
 	assert.NoError(conn0.Close())
 
 	// heuristically time.Sleep works better here than runtime.Gosched()
@@ -206,6 +208,7 @@ func TestClient_AuthResponseMsg(t *testing.T) {
 
 	assert.NotNil(c)
 	assert.NotNil(c.peers)
+	assert.Equal(0, c.peers.NumPeers())
 	assert.Equal(c.propHandler, proposalHandler)
 	assert.False(c.closed.IsSet())
 
@@ -233,10 +236,11 @@ func TestClient_AuthResponseMsg(t *testing.T) {
 	waitGroup.Wait()
 
 	time.Sleep(10 * time.Millisecond)
+	assert.Equal(1, c.peers.NumPeers())
+	assert.True(c.peers.Has(peerId.Address()))
 
-	peer := c.peers.Get(peerId.Address())
-	assert.NotNil(peer)
-	assert.NoError(peer.Close())
-
-	time.Sleep(100 * time.Millisecond)
+	p := c.peers.Get(peerId.Address())
+	assert.NoError(p.Close())
+	time.Sleep(10 * time.Millisecond)
+	assert.Equal(0, c.peers.NumPeers())
 }
