@@ -75,7 +75,6 @@ func TestClient_New(t *testing.T) {
 	assert.NotNil(t, c)
 	assert.NotNil(t, c.peers)
 	assert.Equal(t, c.propHandler, proposalHandler)
-	assert.False(t, c.closed.IsSet())
 }
 
 func TestClient_NewAndListen(t *testing.T) {
@@ -88,7 +87,6 @@ func TestClient_NewAndListen(t *testing.T) {
 	assert.NotNil(t, c)
 	assert.NotNil(t, c.peers)
 	assert.Equal(t, c.propHandler, proposalHandler)
-	assert.False(t, c.closed.IsSet())
 
 	done := make(chan struct{})
 	listener := NewDummyListener()
@@ -112,7 +110,7 @@ func TestClient_NewAndListen(t *testing.T) {
 	// (it may be put to sleep by the scheduler after closing the channel)
 	runtime.Gosched()
 
-	assert.Equal(t, numGoroutines+1, runtime.NumGoroutine())
+	assert.Equal(t, numGoroutines, runtime.NumGoroutine())
 }
 
 type OneTimeListener struct {
@@ -165,7 +163,6 @@ func TestClient_NoAuthResponseMsg(t *testing.T) {
 	assert.NotNil(c.peers)
 	assert.Equal(0, c.peers.NumPeers())
 	assert.Equal(c.propHandler, proposalHandler)
-	assert.False(c.closed.IsSet())
 
 	done := make(chan string, 1)
 	listener := NewOneTimeListener(conn1)
@@ -211,7 +208,6 @@ func TestClient_AuthResponseMsg(t *testing.T) {
 	assert.NotNil(c.peers)
 	assert.Equal(0, c.peers.NumPeers())
 	assert.Equal(c.propHandler, proposalHandler)
-	assert.False(c.closed.IsSet())
 
 	waitGroup := new(sync.WaitGroup)
 	listener := NewOneTimeListener(conn0)
@@ -242,6 +238,9 @@ func TestClient_AuthResponseMsg(t *testing.T) {
 
 	p := c.peers.Get(peerId.Address())
 	assert.NoError(p.Close())
+
+	time.Sleep(10 * time.Millisecond)
+
 	assert.Equal(0, c.peers.NumPeers())
 }
 
