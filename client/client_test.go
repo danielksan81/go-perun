@@ -251,7 +251,7 @@ func TestClient_Multiplexing(t *testing.T) {
 	// appear more frequently
 	// Consequently, the RNG must be seeded externally.
 
-	const numClients = 3
+	const numClients = 2
 	rng := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
 	connHub := new(peertest.ConnHub)
 	identities := make([]peer.Identity, numClients)
@@ -314,8 +314,9 @@ func TestClient_Multiplexing(t *testing.T) {
 	hostBarrier.Add(numClients)
 	peerBarrier.Add(numClients)
 
-	for _, c := range clients {
+	for i, c := range clients {
 		// avoid false sharing
+		index := i
 		client := c
 		sleepTime := time.Duration(rand.Int63n(10) + 1)
 		go func() {
@@ -325,9 +326,22 @@ func TestClient_Multiplexing(t *testing.T) {
 			peerBarrier.Wait()
 			time.Sleep(sleepTime * time.Millisecond)
 
-			assert.NoError(client.Close())
+			var p *peer.Peer
+			if index < numClients/2 {
+				p = clients[0].peers.Get(identities[index].Address())
+			} else {
+				p = client.peers.Get(identities[0].Address())
+			}
+			assert.NoError(p.Close())
 		}()
 	}
 
 	hostBarrier.Wait()
+
+	time.Sleep(10 * time.Millisecond)
+
+	for _, c := range clients {
+		assert.Equal(0, c.peers.NumPeers())
+		assert.NoError(c.Close())
+	}
 }
