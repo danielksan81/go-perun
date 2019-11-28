@@ -251,18 +251,14 @@ func TestClient_Multiplexing(t *testing.T) {
 	// appear more frequently
 	// Consequently, the RNG must be seeded externally.
 
-	const numClients = 2
+	const numClients = 128
 	rng := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
 	connHub := new(peertest.ConnHub)
 	identities := make([]peer.Identity, numClients)
 	dialers := make([]peer.Dialer, numClients)
 	listeners := make([]peer.Listener, numClients)
 	clients := make([]*Client, numClients)
-	hostBarrier := new(sync.WaitGroup)
-	peerBarrier := new(sync.WaitGroup)
-
-	hostBarrier.Add(numClients)
-	peerBarrier.Add(numClients)
+	numPeers := make([]int, numClients)
 
 	for i := 0; i < numClients; i++ {
 		index := i // avoid false sharing
@@ -275,6 +271,37 @@ func TestClient_Multiplexing(t *testing.T) {
 		listeners[index] = listener
 		clients[index] = New(id, dialer, new(DummyProposalHandler))
 
+		go clients[index].Listen(listeners[index])
+	}
+
+	const maxNumConnections = numClients * (numClients - 1) / 2
+	numConnections := maxNumConnections / 10
+	if numConnections < 1 {
+		numConnections = (numClients) / 2
+	}
+
+	hostBarrier := new(sync.WaitGroup)
+	peerBarrier := new(sync.WaitGroup)
+	hostBarrier.Add(numConnections)
+	peerBarrier.Add(numConnections)
+
+	for n := 0; n < numConnections; n++ {
+		i := rng.Intn(numClients)
+		j := rng.Intn(numClients - 1)
+		if j >= i {
+			j = j + 1
+		}
+
+		registry := clients[i].peers
+		peerAddr := identities[j].Address()
+
+		if registry.Has(peerAddr) {
+			n--
+			continue
+		}
+
+		numPeers[i] += 1
+		numPeers[j] += 1
 		sleepTime := time.Duration(rand.Int63n(10) + 1)
 
 		go func() {
@@ -284,41 +311,25 @@ func TestClient_Multiplexing(t *testing.T) {
 			peerBarrier.Wait()
 			time.Sleep(sleepTime * time.Millisecond)
 
-			go clients[index].Listen(listeners[index])
-
-			if index == 0 {
-				return
-			}
-
-			registry := clients[index].peers
-			_ = registry.Get(identities[0].Address())
+			_ = registry.Get(peerAddr)
 		}()
 	}
 
 	hostBarrier.Wait()
+	time.Sleep(1000 * time.Millisecond)
 
-	for clients[0].peers.NumPeers() != numClients-1 {
-		time.Sleep(10 * time.Millisecond)
+	println(numClients)
+	for i := 0; i < numClients; i++ {
+		println(i, numPeers[i])
+		assert.Equal(numPeers[i], clients[i].peers.NumPeers())
 	}
-
-	for i, id := range identities[1:] {
-		assert.True(
-			clients[0].peers.Has(id.Address()),
-			"Identity of client %d unknown to client 0", i+1)
-		assert.True(
-			clients[i+1].peers.Has(identities[0].Address()),
-			"Client %d missing identity of client 0", i+1)
-	}
-
-	assert.Equal(clients[0].peers.NumPeers(), numClients-1)
 
 	// close connections
 	hostBarrier.Add(numClients)
 	peerBarrier.Add(numClients)
 
-	for i, c := range clients {
+	for _, c := range clients {
 		// avoid false sharing
-		index := i
 		client := c
 		sleepTime := time.Duration(rand.Int63n(10) + 1)
 		go func() {
@@ -328,27 +339,17 @@ func TestClient_Multiplexing(t *testing.T) {
 			peerBarrier.Wait()
 			time.Sleep(sleepTime * time.Millisecond)
 
-			if index == 0 {
-				return
-			}
-
-			var p *peer.Peer
-			if index < numClients/2 {
-				p = clients[0].peers.Get(identities[index].Address())
-			} else {
-				p = client.peers.Get(identities[0].Address())
-			}
-			assert.NoError(p.Close())
+			assert.NoError(client.Close())
 		}()
 	}
 
 	hostBarrier.Wait()
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 
 	for i, c := range clients {
 		assert.Equal(
 			0, c.peers.NumPeers(),
 			"Client %d has an unexpected number of peers", i)
-		assert.NoError(c.Close())
+		//assert.NoError(c.Close())
 	}
 }
