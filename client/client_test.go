@@ -244,12 +244,163 @@ func TestClient_AuthResponseMsg(t *testing.T) {
 	assert.Equal(0, c.peers.NumPeers())
 }
 
+func TestClient_Multiplexing(t *testing.T) {
+	testClient_Multiplexing(t, 1, 1)
+	testClient_Multiplexing(t, 1, 1024)
+	testClient_Multiplexing(t, 1024, 1)
+	testClient_Multiplexing(t, 32, 32)
+}
+
+func testClient_Multiplexing(
+	t *testing.T, numListeningClients, numDialingClients int) {
+	assert := assert.New(t)
+
+	assert.Less(0, numListeningClients)
+	assert.Less(0, numDialingClients)
+
+	// the random sleep times are needed to make concurrency-related issues
+	// appear more frequently
+	// Consequently, the RNG must be seeded externally.
+
+	isDialer := func(i int) bool { return i < numDialingClients }
+	numClients := numListeningClients + numDialingClients
+	rng := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
+	connHub := new(peertest.ConnHub)
+	identities := make([]peer.Identity, numClients)
+	dialers := make([]peer.Dialer, numClients)
+	listeners := make([]peer.Listener, numClients)
+	clients := make([]*Client, numClients)
+	numPeers := make([]int, numClients)
+
+	for i := 0; i < numClients; i++ {
+		i := i
+		id := wallet.NewRandomAccount(rng)
+		dialer, listener, err := connHub.Create(id)
+		assert.NoError(err)
+
+		identities[i] = id
+		dialers[i] = dialer
+		listeners[i] = listener
+		clients[i] = New(id, dialer, new(DummyProposalHandler))
+
+		go clients[i].Listen(listeners[i])
+	}
+
+	hostBarrier := new(sync.WaitGroup)
+	peerBarrier := make(chan struct{})
+	// every dialing client connects to every listening client
+	numConnections := numListeningClients * numDialingClients
+	hostBarrier.Add(numConnections)
+
+	// create connections
+	for i := 0; i < numDialingClients; i++ {
+		for y := 0; y < numListeningClients; y++ {
+			i := i
+			j := numDialingClients + y
+			peers := clients[i].peers
+			addr := identities[j].Address()
+			sleepTime := time.Duration(rand.Int63n(10) + 1)
+
+			assert.True(isDialer(i))
+			assert.False(isDialer(j))
+
+			numPeers[i] += 1
+			numPeers[j] += 1
+
+			go func() {
+				defer hostBarrier.Done()
+
+				<-peerBarrier
+				time.Sleep(sleepTime * time.Millisecond)
+
+				// perform this test inside closure to detect errors involving
+				// the loop variable
+				assert.NotEqual(clients[i].id.Address(), addr)
+
+				_ = peers.Get(addr)
+			}()
+		}
+	}
+
+	close(peerBarrier)
+	hostBarrier.Wait()
+	time.Sleep(10 * time.Millisecond)
+
+	for i := 0; i < numClients; i++ {
+		assert.Equal(numPeers[i], clients[i].peers.NumPeers())
+	}
+
+	for i := 0; i < numDialingClients; i++ {
+		for y := 0; y < numListeningClients; y++ {
+			j := numDialingClients + y
+			peersI := clients[i].peers
+			peersJ := clients[j].peers
+			addrI := identities[i].Address()
+			addrJ := identities[j].Address()
+			assert.True(peersI.Has(addrJ))
+			assert.True(peersJ.Has(addrI))
+		}
+	}
+
+	// close connections
+	peerBarrier = make(chan struct{})
+	hostBarrier.Add(numConnections)
+
+	for i := 0; i < numDialingClients; i++ {
+		i := i
+
+		// disconnect numListeningClients/2 connections from dialer side
+		// disconnect numListeningClients/2 connections from listener side
+		xs := rng.Perm(numListeningClients)
+
+		for k := 0; k < numListeningClients; k++ {
+			j := numDialingClients + xs[k]
+			sleepTime := time.Duration(rand.Int63n(10) + 1)
+
+			assert.True(isDialer(i))
+			assert.False(isDialer(j))
+
+			go func() {
+				defer hostBarrier.Done()
+
+				<-peerBarrier
+				time.Sleep(sleepTime * time.Millisecond)
+
+				var peers *peer.Registry
+				var addr peer.Address
+				if k < numListeningClients/2 {
+					peers = clients[i].peers
+					addr = identities[j].Address()
+				} else {
+					peers = clients[j].peers
+					addr = identities[i].Address()
+				}
+
+				assert.True(peers.Has(addr))
+				p := peers.Get(addr)
+				assert.NoError(p.Close())
+			}()
+		}
+	}
+
+	close(peerBarrier)
+	hostBarrier.Wait()
+	time.Sleep(10 * time.Millisecond)
+
+	for i, c := range clients {
+		assert.Equal(
+			0, c.peers.NumPeers(),
+			"Client %d has an unexpected number of peers", i)
+		assert.NoError(c.Close())
+	}
+}
+
 type Tuple struct {
 	r int
 	s int
 }
 
-func TestClient_Multiplexing(t *testing.T) {
+func TestClient_RandomMultiplexing(t *testing.T) {
 	assert := assert.New(t)
 
 	// the random sleep times are needed to make concurrency-related issues
@@ -329,11 +480,9 @@ func TestClient_Multiplexing(t *testing.T) {
 	}
 
 	hostBarrier.Wait()
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
-	println(numClients)
 	for i := 0; i < numClients; i++ {
-		println(i, numPeers[i])
 		assert.Equal(numPeers[i], clients[i].peers.NumPeers())
 	}
 
@@ -356,7 +505,7 @@ func TestClient_Multiplexing(t *testing.T) {
 	}
 
 	hostBarrier.Wait()
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	for i, c := range clients {
 		assert.Equal(
