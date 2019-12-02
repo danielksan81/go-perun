@@ -244,6 +244,11 @@ func TestClient_AuthResponseMsg(t *testing.T) {
 	assert.Equal(0, c.peers.NumPeers())
 }
 
+type Tuple struct {
+	r int
+	s int
+}
+
 func TestClient_Multiplexing(t *testing.T) {
 	assert := assert.New(t)
 
@@ -261,17 +266,17 @@ func TestClient_Multiplexing(t *testing.T) {
 	numPeers := make([]int, numClients)
 
 	for i := 0; i < numClients; i++ {
-		index := i // avoid false sharing
+		i := i
 		id := wallet.NewRandomAccount(rng)
 		dialer, listener, err := connHub.Create(id)
 		assert.NoError(err)
 
-		identities[index] = id
-		dialers[index] = dialer
-		listeners[index] = listener
-		clients[index] = New(id, dialer, new(DummyProposalHandler))
+		identities[i] = id
+		dialers[i] = dialer
+		listeners[i] = listener
+		clients[i] = New(id, dialer, new(DummyProposalHandler))
 
-		go clients[index].Listen(listeners[index])
+		go clients[i].Listen(listeners[i])
 	}
 
 	const maxNumConnections = numClients * (numClients - 1) / 2
@@ -284,21 +289,29 @@ func TestClient_Multiplexing(t *testing.T) {
 	peerBarrier := new(sync.WaitGroup)
 	hostBarrier.Add(numConnections)
 	peerBarrier.Add(numConnections)
+	connectionList := map[Tuple]int{}
 
 	for n := 0; n < numConnections; n++ {
 		i := rng.Intn(numClients)
 		j := rng.Intn(numClients - 1)
+		r := j
+		s := i
 		if j >= i {
 			j = j + 1
+			r = i
+			s = j
 		}
 
-		registry := clients[i].peers
-		peerAddr := identities[j].Address()
+		assert.Less(r, s)
 
-		if registry.Has(peerAddr) {
+		if _, ok := connectionList[Tuple{r,s}]; ok {
 			n--
 			continue
 		}
+
+		connectionList[Tuple{r,s}] = 1
+		registry := clients[i].peers
+		peerAddr := identities[j].Address()
 
 		numPeers[i] += 1
 		numPeers[j] += 1
@@ -329,8 +342,7 @@ func TestClient_Multiplexing(t *testing.T) {
 	peerBarrier.Add(numClients)
 
 	for _, c := range clients {
-		// avoid false sharing
-		client := c
+		c := c
 		sleepTime := time.Duration(rand.Int63n(10) + 1)
 		go func() {
 			defer hostBarrier.Done()
@@ -339,7 +351,7 @@ func TestClient_Multiplexing(t *testing.T) {
 			peerBarrier.Wait()
 			time.Sleep(sleepTime * time.Millisecond)
 
-			assert.NoError(client.Close())
+			assert.NoError(c.Close())
 		}()
 	}
 
