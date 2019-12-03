@@ -15,6 +15,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	_ "perun.network/go-perun/backend/sim/channel" // backend init
 	"perun.network/go-perun/backend/sim/wallet"
@@ -254,9 +255,10 @@ func TestClient_Multiplexing(t *testing.T) {
 func testClient_Multiplexing(
 	t *testing.T, numListeningClients, numDialingClients int) {
 	assert := assert.New(t)
+	require := require.New(t)
 
-	assert.Less(0, numListeningClients)
-	assert.Less(0, numDialingClients)
+	require.Less(0, numListeningClients)
+	require.Less(0, numDialingClients)
 
 	// the random sleep times are needed to make concurrency-related issues
 	// appear more frequently
@@ -270,20 +272,21 @@ func testClient_Multiplexing(
 	dialers := make([]peer.Dialer, numClients)
 	listeners := make([]peer.Listener, numClients)
 	clients := make([]*Client, numClients)
-	numPeers := make([]int, numClients)
 
 	for i := 0; i < numClients; i++ {
 		i := i
 		id := wallet.NewRandomAccount(rng)
 		dialer, listener, err := connHub.Create(id)
-		assert.NoError(err)
+		require.NoError(err)
 
 		identities[i] = id
 		dialers[i] = dialer
 		listeners[i] = listener
 		clients[i] = New(id, dialer, new(DummyProposalHandler))
 
-		go clients[i].Listen(listeners[i])
+		if i >= numDialingClients {
+			go clients[i].Listen(listeners[i])
+		}
 	}
 
 	hostBarrier := new(sync.WaitGroup)
@@ -295,19 +298,14 @@ func testClient_Multiplexing(
 	// create connections
 	for i := 0; i < numDialingClients; i++ {
 		for y := 0; y < numListeningClients; y++ {
-			i := i
 			j := numDialingClients + y
-			peers := clients[i].peers
 			addr := identities[j].Address()
 			sleepTime := time.Duration(rand.Int63n(10) + 1)
 
-			assert.True(isDialer(i))
-			assert.False(isDialer(j))
+			require.True(isDialer(i))
+			require.False(isDialer(j))
 
-			numPeers[i] += 1
-			numPeers[j] += 1
-
-			go func() {
+			go func(i int) {
 				defer hostBarrier.Done()
 
 				<-peerBarrier
@@ -315,30 +313,32 @@ func testClient_Multiplexing(
 
 				// perform this test inside closure to detect errors involving
 				// the loop variable
-				assert.NotEqual(clients[i].id.Address(), addr)
+				require.False(clients[i].id.Address().Equals(addr))
 
-				_ = peers.Get(addr)
-			}()
+				// trigger dialing
+				_ = clients[i].peers.Get(addr)
+			}(i)
 		}
 	}
 
 	close(peerBarrier)
 	hostBarrier.Wait()
-	time.Sleep(10 * time.Millisecond)
+	// race tests fail with lower sleep because not all Client.Listen routines
+	// have added the peer to their registry yet.
+	time.Sleep(200 * time.Millisecond)
 
-	for i := 0; i < numClients; i++ {
-		assert.Equal(numPeers[i], clients[i].peers.NumPeers())
+	for i := 0; i < numDialingClients; i++ {
+		assert.Equal(numListeningClients, clients[i].peers.NumPeers())
+	}
+
+	for i := numDialingClients; i < numDialingClients+numListeningClients; i++ {
+		assert.Equal(numDialingClients, clients[i].peers.NumPeers())
 	}
 
 	for i := 0; i < numDialingClients; i++ {
-		for y := 0; y < numListeningClients; y++ {
-			j := numDialingClients + y
-			peersI := clients[i].peers
-			peersJ := clients[j].peers
-			addrI := identities[i].Address()
-			addrJ := identities[j].Address()
-			assert.True(peersI.Has(addrJ))
-			assert.True(peersJ.Has(addrI))
+		for j := numDialingClients; j < numDialingClients+numListeningClients; j++ {
+			assert.True(clients[i].peers.Has(identities[j].Address()))
+			assert.True(clients[j].peers.Has(identities[i].Address()))
 		}
 	}
 
@@ -357,10 +357,10 @@ func testClient_Multiplexing(
 			j := numDialingClients + xs[k]
 			sleepTime := time.Duration(rand.Int63n(10) + 1)
 
-			assert.True(isDialer(i))
-			assert.False(isDialer(j))
+			require.True(isDialer(i))
+			require.False(isDialer(j))
 
-			go func() {
+			go func(k int) {
 				defer hostBarrier.Done()
 
 				<-peerBarrier
@@ -379,7 +379,7 @@ func testClient_Multiplexing(
 				assert.True(peers.Has(addr))
 				p := peers.Get(addr)
 				assert.NoError(p.Close())
-			}()
+			}(k)
 		}
 	}
 
@@ -388,10 +388,9 @@ func testClient_Multiplexing(
 	time.Sleep(10 * time.Millisecond)
 
 	for i, c := range clients {
-		assert.Equal(
-			0, c.peers.NumPeers(),
-			"Client %d has an unexpected number of peers", i)
-		assert.NoError(c.Close())
+		np := c.peers.NumPeers()
+		assert.Zero(np, "Client %d has an unexpected number of peers: %d", i, np)
+		assert.NoErrorf(c.Close(), "closing client[%d]", i)
 	}
 }
 
@@ -400,7 +399,7 @@ type Tuple struct {
 	s int
 }
 
-func TestClient_RandomMultiplexing(t *testing.T) {
+func testClient_RandomMultiplexing(t *testing.T) {
 	assert := assert.New(t)
 
 	// the random sleep times are needed to make concurrency-related issues
@@ -455,12 +454,12 @@ func TestClient_RandomMultiplexing(t *testing.T) {
 
 		assert.Less(r, s)
 
-		if _, ok := connectionList[Tuple{r,s}]; ok {
+		if _, ok := connectionList[Tuple{r, s}]; ok {
 			n--
 			continue
 		}
 
-		connectionList[Tuple{r,s}] = 1
+		connectionList[Tuple{r, s}] = 1
 		registry := clients[i].peers
 		peerAddr := identities[j].Address()
 
