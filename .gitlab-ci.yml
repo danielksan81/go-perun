@@ -42,7 +42,7 @@ unit_tests:
 unit_race_tests:
   image: golang
   stage: tests
-  script: "go test -timeout 60s -race ./..."
+  script: "go test -timeout 120s -race ./..."
   only:
     - merge_requests
   when: on_success
