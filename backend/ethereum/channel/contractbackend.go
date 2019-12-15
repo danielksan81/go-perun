@@ -32,6 +32,8 @@ type contractInterface interface {
 
 type contractBackend struct {
 	contractInterface
+	ks      *keystore.KeyStore
+	account *accounts.Account
 }
 
 func (c *contractBackend) newWatchOpts(ctx context.Context) (*bind.WatchOpts, error) {
