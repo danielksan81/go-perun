@@ -56,6 +56,13 @@ func NewETHFunder(client *ethclient.Client, keystore *keystore.KeyStore, account
 	}
 }
 
+func NewSimulatedFunder(backend ContractBackend, ethAssetHolder common.Address) Funder {
+	return Funder{
+		ContractBackend: backend,
+		ethAssetHolder:  ethAssetHolder,
+	}
+}
+
 // Fund implements the funder interface.
 // It can be used to fund state channels on the ethereum blockchain.
 func (f *Funder) Fund(ctx context.Context, request channel.FundingReq) error {
@@ -153,32 +160,34 @@ func (f *Funder) waitForFundingConfirmations(ctx context.Context, request channe
 	}
 
 	allocation := request.Allocation.Clone()
-	for i := 0; i < len(request.Params.Parts)*len(contracts); i++ {
-		select {
-		case event := <-deposited:
-			// Calculate the position in the participant array.
-			idx := -1
-			for k, ele := range partIDs {
-				if ele == event.FundingID {
-					idx = k
+	for i := 0; i < len(contracts); i++ {
+		for k := 0; k < len(request.Params.Parts); k++ {
+			select {
+			case event := <-deposited:
+				// Calculate the position in the participant array.
+				idx := -1
+				for h, ele := range partIDs {
+					if ele == event.FundingID {
+						idx = h
+					}
 				}
-			}
-			// Retrieve the position in the asset array.
-			assetIdx := -1
-			for k, ele := range contracts {
-				if *ele.Address == event.Raw.Address {
-					assetIdx = k
+				// Retrieve the position in the asset array.
+				assetIdx := -1
+				for h, ele := range contracts {
+					if *ele.Address == event.Raw.Address {
+						assetIdx = h
+					}
 				}
+				// Check if the participant send the correct amounts of funds.
+				if allocation.OfParts[idx][assetIdx].Cmp(event.Amount) != 0 {
+					return errors.New("deposit in asset %d from pariticipant %d does not match agreed upon asset")
+				}
+				allocation.OfParts[idx][assetIdx] = big.NewInt(0)
+			case <-ctx.Done():
+				return errors.Wrap(ctx.Err(), "Waiting for events cancelled by context")
+			case err := <-subs[i].Err():
+				return errors.Wrap(err, "Error while waiting for events")
 			}
-			// Check if the participant send the correct amounts of funds.
-			if allocation.OfParts[idx][assetIdx].Cmp(event.Amount) != 0 {
-				return errors.New("deposit in asset %d from pariticipant %d does not match agreed upon asset")
-			}
-			allocation.OfParts[idx][assetIdx] = big.NewInt(0)
-		case <-ctx.Done():
-			return errors.Wrap(ctx.Err(), "Waiting for events cancelled by context")
-		case err := <-subs[i].Err():
-			return errors.Wrap(err, "Error while waiting for events")
 		}
 	}
 	// Check if everyone funded correctly.

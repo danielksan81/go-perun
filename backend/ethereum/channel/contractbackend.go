@@ -24,16 +24,24 @@ import (
 // How many blocks we query into the past for events.
 const startBlockOffset = 100
 
-type contractInterface interface {
+type ContractInterface interface {
 	bind.ContractBackend
 	BlockByNumber(context.Context, *big.Int) (*types.Block, error)
 	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 }
 
 type ContractBackend struct {
-	contractInterface
+	ContractInterface
 	ks      *keystore.KeyStore
 	account *accounts.Account
+}
+
+func NewContractBackend(cf ContractInterface, ks *keystore.KeyStore, acc *accounts.Account) ContractBackend {
+	return ContractBackend{
+		ContractInterface: cf,
+		ks:                ks,
+		account:           acc,
+	}
 }
 
 func (c *ContractBackend) newWatchOpts(ctx context.Context) (*bind.WatchOpts, error) {
