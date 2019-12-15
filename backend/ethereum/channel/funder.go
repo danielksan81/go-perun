@@ -53,11 +53,12 @@ type Funder struct {
 var _ channel.Funder = (*Funder)(nil)
 
 // NewETHFunder creates a new ethereum funder.
-func NewETHFunder(client *ethclient.Client, keystore *keystore.KeyStore, account *accounts.Account) Funder {
+func NewETHFunder(client *ethclient.Client, keystore *keystore.KeyStore, account *accounts.Account, ethAssetHolder common.Address) Funder {
 	return Funder{
-		client:  contractBackend{client},
-		ks:      keystore,
-		account: account,
+		client:         contractBackend{client},
+		ks:             keystore,
+		account:        account,
+		ethAssetHolder: ethAssetHolder,
 	}
 }
 
