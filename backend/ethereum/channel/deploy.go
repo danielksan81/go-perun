@@ -7,7 +7,6 @@ package channel
 import (
 	"context"
 	"math/big"
-	"sync"
 
 	"github.com/EthLaika/go-laika/core/types"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -24,7 +23,6 @@ type Deployer struct {
 	client  contractBackend
 	ks      *keystore.KeyStore
 	account *accounts.Account
-	mu      sync.Mutex
 }
 
 // NewETHDeployer creates a new ethereum deployer.
