@@ -16,7 +16,6 @@ import (
 
 	"perun.network/go-perun/channel"
 	"perun.network/go-perun/client"
-	wallettest "perun.network/go-perun/wallet/test"
 )
 
 type Alice struct {
@@ -52,7 +51,7 @@ func (r *Alice) Execute(cfg ExecConfig) {
 	prop := &client.ChannelProposal{
 		ChallengeDuration: 10,           // 10 sec
 		Nonce:             new(big.Int), // nonce 0
-		Account:           wallettest.NewRandomAccount(r.rng),
+		Account:           r.setup.Identity,
 		AppDef:            cfg.AppDef,
 		InitData:          channel.NewMockOp(channel.OpValid),
 		InitBals:          initBals,

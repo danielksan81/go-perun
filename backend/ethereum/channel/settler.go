@@ -40,6 +40,13 @@ func NewETHSettler(client *ethclient.Client, keystore *keystore.KeyStore, accoun
 	}
 }
 
+func NewSimulatedSettler(backend ContractBackend, keystore *keystore.KeyStore, account *accounts.Account, adjAddr common.Address) Settler {
+	return Settler{
+		ContractBackend: ContractBackend{backend, keystore, account},
+		adjAddr:         adjAddr,
+	}
+}
+
 // Settle provides the settle functionality.
 func (s *Settler) Settle(ctx context.Context, req channel.SettleReq, acc perunwallet.Account) error {
 	if req.Params == nil || req.Tx.State == nil {

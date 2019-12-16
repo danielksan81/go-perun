@@ -73,6 +73,9 @@ func TestHappyAliceBobETH(t *testing.T) {
 	funderBob := channel.NewSimulatedFunder(cbBob, assetAddr)
 	aliceAcc := wallet.NewAccountFromEth(&w, &aliceAccETH)
 	bobAcc := wallet.NewAccountFromEth(&w, &bobAccETH)
+	// Create the settlers
+	settlerAlice := channel.NewSimulatedSettler(cbAlice, ks, &aliceAccETH, adjAddr)
+	settlerBob := channel.NewSimulatedSettler(cbBob, ks, &bobAccETH, adjAddr)
 
 	setupAlice := clienttest.RoleSetup{
 		Name:     "Alice",
@@ -80,7 +83,7 @@ func TestHappyAliceBobETH(t *testing.T) {
 		Dialer:   hub.NewDialer(),
 		Listener: hub.NewListener(aliceAcc.Address()),
 		Funder:   &funderAlice,
-		Settler:  nil, // TODO
+		Settler:  &settlerAlice, // TODO
 		Timeout:  defaultTimeout,
 	}
 
@@ -90,7 +93,7 @@ func TestHappyAliceBobETH(t *testing.T) {
 		Dialer:   hub.NewDialer(),
 		Listener: hub.NewListener(bobAcc.Address()),
 		Funder:   &funderBob,
-		Settler:  nil, // TODO
+		Settler:  &settlerBob, // TODO
 		Timeout:  defaultTimeout,
 	}
 
@@ -98,6 +101,7 @@ func TestHappyAliceBobETH(t *testing.T) {
 		PeerAddrs:       []peer.Address{aliceAcc.Address(), bobAcc.Address()},
 		InitBals:        []*big.Int{big.NewInt(100), big.NewInt(100)},
 		Asset:           &wallet.Address{Address: assetAddr},
+		AppDef:          &wallet.Address{Address: assetAddr},
 		NumUpdatesBob:   2,
 		NumUpdatesAlice: 2,
 		TxAmountBob:     big.NewInt(5),
