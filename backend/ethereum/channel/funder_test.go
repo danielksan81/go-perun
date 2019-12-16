@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
@@ -29,6 +30,8 @@ const (
 	keystoreAddr = "0x3c5A96FF258B1F4C288068B32474dedC3620233c"
 	keyStorePath = "UTC--2019-06-07T12-12-48.775026092Z--3c5a96ff258b1f4c288068b32474dedc3620233c"
 )
+
+const timeout = 100 * time.Millisecond
 
 func TestFunder_Fund(t *testing.T) {
 	f := newSimulatedFunder()
@@ -51,8 +54,13 @@ func TestFunder_Fund(t *testing.T) {
 		Allocation: allocation,
 		Idx:        0,
 	}
-	assert.NoError(t, f.Fund(context.Background(), req), "funding with valid request should succeed")
-	assert.NoError(t, f.Fund(context.Background(), req), "multiple funding should succeed")
+	// Test with valid context
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	assert.NoError(t, f.Fund(ctx, req), "funding with valid request should succeed")
+	assert.NoError(t, f.Fund(ctx, req), "multiple funding should succeed")
+	cancel()
+	// Test already closed context
+	assert.Error(t, f.Fund(ctx, req), "funding with already cancelled context should fail")
 }
 
 func newSimulatedFunder() *Funder {
@@ -70,7 +78,7 @@ func newSimulatedFunder() *Funder {
 
 func newValidAllocation(f *Funder, parts []perunwallet.Address, adjudicatorAddr common.Address) *channel.Allocation {
 	// Deploy Assetholder
-	assetETH, err := DeployETHAssetholder(f.ContractBackend, adjudicatorAddr)
+	assetETH, err := DeployETHAssetholder(context.Background(), f.ContractBackend, adjudicatorAddr)
 	if err != nil {
 		panic(err)
 	}
@@ -79,11 +87,13 @@ func newValidAllocation(f *Funder, parts []perunwallet.Address, adjudicatorAddr 
 	assets := []channel.Asset{
 		&Asset{Address: assetETH},
 	}
+	rng := rand.New(rand.NewSource(1337))
 	ofparts := make([][]channel.Bal, len(parts))
 	for i := 0; i < len(ofparts); i++ {
 		ofparts[i] = make([]channel.Bal, len(assets))
 		for k := 0; k < len(assets); k++ {
-			ofparts[i][k] = big.NewInt(1)
+			// create new random balance in range [1,999]
+			ofparts[i][k] = big.NewInt(rng.Int63n(999) + 1)
 		}
 	}
 	return &channel.Allocation{
