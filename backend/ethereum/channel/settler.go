@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -84,9 +85,10 @@ func (s *Settler) cooperativeSettle(ctx context.Context, req channel.SettleReq) 
 	}
 	log.Debugf("Sending transaction to the blockchain with txHash: ", tx.Hash().Hex())
 	if err := execSuccessful(s.ContractBackend, tx); err != nil {
-		return err
+		log.Warnf("transaction failed: %v", err)
+	} else {
+		log.Debugf("Transaction mined successful")
 	}
-	log.Debugf("Transaction mined successful")
 	return <-confirmation
 }
 
@@ -95,16 +97,27 @@ func (s *Settler) uncooperativeSettle(ctx context.Context, req channel.SettleReq
 }
 
 func (s *Settler) waitForSettlingConfirmation(ctx context.Context, adjInstance *adjudicator.Adjudicator, channelID [32]byte) error {
+	// Filter
+	filterOpts := bind.FilterOpts{uint64(1), nil, ctx}
+	iter, err := adjInstance.FilterFinalConcluded(&filterOpts, [][32]byte{channelID})
+	if err != nil {
+		return err
+	}
+	if iter.Next() {
+		return nil
+	}
+
+	// Watch
 	watchOpts, err := s.newWatchOpts(ctx)
 	if err != nil {
 		return errors.Wrap(err, "could not create new watchOpts")
 	}
 	concluded := make(chan *adjudicator.AdjudicatorFinalConcluded)
 	sub, err := adjInstance.WatchFinalConcluded(watchOpts, concluded, [][32]byte{channelID})
-	defer sub.Unsubscribe()
 	if err != nil {
 		return errors.WithMessage(err, "WatchFinalConcluded failed")
 	}
+	defer sub.Unsubscribe()
 	select {
 	case <-concluded:
 		return nil
@@ -113,6 +126,7 @@ func (s *Settler) waitForSettlingConfirmation(ctx context.Context, adjInstance *
 	case err = <-sub.Err():
 		return errors.Wrap(err, "Error while waiting for events")
 	}
+
 }
 
 func (s *Settler) connectToContract(ctx context.Context) (*adjudicator.Adjudicator, error) {
