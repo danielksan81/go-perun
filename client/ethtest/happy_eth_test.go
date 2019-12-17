@@ -2,17 +2,16 @@
 // This file is part of go-perun. Use of this source code is governed by a
 // MIT-style license that can be found in the LICENSE file.
 
-package client_test
+package ethtest
 
 import (
 	"context"
-	"io/ioutil"
 	"math/big"
+	"math/rand"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 
@@ -24,6 +23,7 @@ import (
 	plogrus "perun.network/go-perun/log/logrus"
 	"perun.network/go-perun/peer"
 	peertest "perun.network/go-perun/peer/test"
+	wallettest "perun.network/go-perun/wallet/test"
 )
 
 func init() {
@@ -41,28 +41,23 @@ func TestHappyAliceBobETH(t *testing.T) {
 	log.Info("Starting happy test")
 	var hub peertest.ConnHub
 
+	rng := rand.New(rand.NewSource(0x1337))
+
 	// Create a new KeyStore
-	tmpDir, err := ioutil.TempDir("", "go-perun-test-eth-keystore-")
-	assert.NoError(t, err, "creating tempdir should not fail")
-	const scryptN = 2
-	const scryptP = 1
-	ks := keystore.NewKeyStore(tmpDir, scryptN, scryptP)
-	w := wallet.Wallet{Ks: ks}
+	ks := wallet.GetKeystore()
 	// Create alice and bobs account
-	aliceAccETH, err := ks.NewAccount("secret")
-	assert.NoError(t, err, "Creating alice account should not fail")
-	assert.NoError(t, ks.Unlock(aliceAccETH, "secret"), "unlocking should not fail")
-	bobAccETH, err := ks.NewAccount("secret")
-	assert.NoError(t, err, "Creating alice account should not fail")
-	assert.NoError(t, ks.Unlock(bobAccETH, "secret"), "unlocking should not fail")
+	aliceAcc := wallettest.NewRandomAccount(rng)
+	bobAcc := wallettest.NewRandomAccount(rng)
+	aliceAccETH := aliceAcc.(*wallet.Account).Account
+	bobAccETH := bobAcc.(*wallet.Account).Account
 	// Create SimulatedBackend
 	backend := test.NewSimulatedBackend()
 	// Fund both accounts
 	backend.FundAddress(context.Background(), aliceAccETH.Address)
 	backend.FundAddress(context.Background(), bobAccETH.Address)
 	// Create contract backends
-	cbAlice := channel.NewContractBackend(backend, ks, &aliceAccETH)
-	cbBob := channel.NewContractBackend(backend, ks, &bobAccETH)
+	cbAlice := channel.NewContractBackend(backend, ks, aliceAccETH)
+	cbBob := channel.NewContractBackend(backend, ks, bobAccETH)
 	// Deploy the contracts
 	adjAddr, err := channel.DeployAdjudicator(cbAlice)
 	assert.NoError(t, err, "Adjudicator should deploy successful")
@@ -71,11 +66,9 @@ func TestHappyAliceBobETH(t *testing.T) {
 	// Create the funders
 	funderAlice := channel.NewSimulatedFunder(cbAlice, assetAddr)
 	funderBob := channel.NewSimulatedFunder(cbBob, assetAddr)
-	aliceAcc := wallet.NewAccountFromEth(&w, &aliceAccETH)
-	bobAcc := wallet.NewAccountFromEth(&w, &bobAccETH)
 	// Create the settlers
-	settlerAlice := channel.NewSimulatedSettler(cbAlice, ks, &aliceAccETH, adjAddr)
-	settlerBob := channel.NewSimulatedSettler(cbBob, ks, &bobAccETH, adjAddr)
+	settlerAlice := channel.NewSimulatedSettler(cbAlice, ks, aliceAccETH, adjAddr)
+	settlerBob := channel.NewSimulatedSettler(cbBob, ks, bobAccETH, adjAddr)
 
 	setupAlice := clienttest.RoleSetup{
 		Name:     "Alice",
