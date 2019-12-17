@@ -98,7 +98,10 @@ func (s *Settler) uncooperativeSettle(ctx context.Context, req channel.SettleReq
 
 func (s *Settler) waitForSettlingConfirmation(ctx context.Context, adjInstance *adjudicator.Adjudicator, channelID [32]byte) error {
 	// Filter
-	filterOpts := bind.FilterOpts{uint64(1), nil, ctx}
+	filterOpts := bind.FilterOpts{
+		Start:   uint64(1),
+		End:     nil,
+		Context: ctx}
 	iter, err := adjInstance.FilterFinalConcluded(&filterOpts, [][32]byte{channelID})
 	if err != nil {
 		return err

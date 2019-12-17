@@ -81,8 +81,6 @@ func TestSettler_Settle(t *testing.T) {
 
 	err = s.Settle(context.Background(), req, offChainAcc)
 	assert.NoError(t, err, "Settling with valid state should not produce error")
-	err = s.Settle(context.Background(), req, offChainAcc)
-	assert.Error(t, err, "Settling twice should fail")
 }
 
 func newSimulatedSettler() *Settler {
