@@ -98,10 +98,3 @@ func Test_NewWatchOpts(t *testing.T) {
 	assert.Equal(t, context.WithValue(context.Background(), "foo", "bar"), watchOpts.Context, "context should be set")
 	assert.Equal(t, uint64(1), *watchOpts.Start, "startblock should be 1")
 }
-
-func BenchmarkFunder(b *testing.B) {
-	var t testing.T
-	for i := 0; i < b.N; i++ {
-		TestFunder_Fund(&t)
-	}
-}
