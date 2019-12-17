@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/pkg/errors"
+	"perun.network/go-perun/log"
 	perun "perun.network/go-perun/wallet"
 )
 
@@ -70,7 +71,10 @@ func (a *Account) SignData(data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, errors.WithMessage(err, "could not sign data")
 	}
-	sig[64] += 27
+	if sig[64] <= 1 {
+		sig[64] = sig[64] + 27
+	}
+	log.Debug(sig)
 	return sig, nil
 }
 
@@ -84,7 +88,9 @@ func (a *Account) SignDataWithPW(password string, data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, errors.WithMessage(err, "could not sign data")
 	}
-	sig[64] += 27
+	if sig[64] <= 1 {
+		sig[64] = sig[64] + 27
+	}
 	return sig, nil
 }
 
