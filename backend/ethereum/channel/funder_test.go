@@ -80,34 +80,31 @@ func testFunderFunding(t *testing.T, n int) {
 	if err != nil {
 		panic(err)
 	}
-
+	t.Log(assetETH.String())
 	parts := make([]perunwallet.Address, n)
 	funders := make([]*Funder, n)
 	for i := 0; i < n; i++ {
 		acc := wallettest.NewRandomAccount(rng).(*wallet.Account)
 		simBackend.FundAddress(context.Background(), acc.Account.Address)
 		parts[i] = acc.Address()
-		funders[i] = &Funder{
-			ContractBackend: ContractBackend{simBackend, ks, acc.Account},
-			ethAssetHolder:  assetETH,
-		}
+		cb := NewContractBackend(simBackend, ks, acc.Account)
+		funders[i] = NewSimulatedFunder(cb, assetETH)
 	}
 	app := channeltest.NewRandomApp(rng)
 	params := channel.NewParamsUnsafe(uint64(0), parts, app.Def(), big.NewInt(rng.Int63()))
 	allocation := newValidAllocation(parts, assetETH)
-	req := channel.FundingReq{
-		Params:     params,
-		Allocation: allocation,
-		Idx:        0,
-	}
 	// Test with valid context
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout*10)
 	defer cancel()
-	for _, funder := range funders {
-		assert.NoError(t, funder.Fund(ctx, req), "funding should succeed")
+	for i, funder := range funders {
+		req := channel.FundingReq{
+			Params:     params,
+			Allocation: allocation,
+			Idx:        uint16(i),
+		}
+		err := funder.Fund(ctx, req)
+		assert.NoError(t, err, "funding should succeed")
 	}
-	// Test already closed context
-	assert.Error(t, funders[0].Fund(ctx, req), "funding with already cancelled context should fail")
 }
 
 func newSimulatedFunder() *Funder {

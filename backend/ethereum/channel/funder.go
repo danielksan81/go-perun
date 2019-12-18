@@ -55,6 +55,13 @@ func NewETHFunder(client ContractInterface, keystore *keystore.KeyStore, account
 	}
 }
 
+func NewSimulatedFunder(backend ContractBackend, ethAssetHolder common.Address) *Funder {
+	return &Funder{
+		ContractBackend: backend,
+		ethAssetHolder:  ethAssetHolder,
+	}
+}
+
 // Fund implements the funder interface.
 // It can be used to fund state channels on the ethereum blockchain.
 func (f *Funder) Fund(ctx context.Context, request channel.FundingReq) error {
@@ -123,6 +130,9 @@ func (f *Funder) fundAssets(ctx context.Context, request channel.FundingReq, con
 
 		if err != nil {
 			return errors.Wrapf(err, "depositing asset %d", assetIndex)
+		}
+		if execSuccessful(ctx, f.ContractBackend, tx) != nil {
+			panic(("adsfadf"))
 		}
 		log.Debugf("Sending transaction to the blockchain with txHash: ", tx.Hash().Hex())
 	}

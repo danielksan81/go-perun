@@ -29,8 +29,8 @@ func DeployETHAssetholder(ctx context.Context, backend ContractBackend, adjudica
 	if err != nil {
 		return common.Address{}, errors.WithMessage(err, "could not create transaction")
 	}
-	if err = execSuccessful(ctx, backend, tx); err != nil {
-		return common.Address{}, nil
+	if err := execSuccessful(ctx, backend, tx); err != nil {
+		return common.Address{}, err
 	}
 	log.Infof("Sucessfully deployed AssetHolderETH at %v.", addr.Hex())
 	return addr, nil
@@ -47,7 +47,7 @@ func DeployAdjudicator(ctx context.Context, backend ContractBackend) (common.Add
 		return common.Address{}, errors.WithMessage(err, "could not create transaction")
 	}
 	if err = execSuccessful(ctx, backend, tx); err != nil {
-		return common.Address{}, nil
+		return common.Address{}, err
 	}
 	log.Infof("Sucessfully deployed Adjudicator at %v.", addr.Hex())
 	return addr, nil
