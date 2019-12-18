@@ -20,6 +20,8 @@ import (
 	"perun.network/go-perun/backend/ethereum/channel/test"
 	channeltest "perun.network/go-perun/channel/test"
 	perunwallet "perun.network/go-perun/wallet"
+
+	ethwallettest "perun.network/go-perun/backend/ethereum/wallet/test"
 )
 
 const nodeURL = "ws://localhost:8545"
@@ -71,7 +73,7 @@ func Test_Funder(t *testing.T) {
 func testFunderFunding(t *testing.T, n int) {
 	simBackend := test.NewSimulatedBackend()
 	rng := rand.New(rand.NewSource(1337))
-	ks := wallet.GetKeystore()
+	ks := ethwallettest.GetKeystore()
 	deployAccount := wallettest.NewRandomAccount(rng).(*wallet.Account).Account
 	simBackend.FundAddress(context.Background(), deployAccount.Address)
 	contractBackend := NewContractBackend(simBackend, ks, deployAccount)
