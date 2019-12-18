@@ -13,6 +13,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"perun.network/go-perun/backend/ethereum/wallet"
 	"perun.network/go-perun/channel"
 	wallettest "perun.network/go-perun/wallet/test"
@@ -66,28 +67,31 @@ func TestFunder_Fund(t *testing.T) {
 	assert.Error(t, f.Fund(ctx, req), "funding with already cancelled context should fail")
 }
 
-func Test_Funder(t *testing.T) {
-	t.Run("2 party funding", func(t *testing.T) { testFunderFunding(t, 2) })
+func TestFunder_Fund_multi(t *testing.T) {
+	t.Run("1-party funding", func(t *testing.T) { testFunderFunding(t, 1) })
+	t.Run("2-party funding", func(t *testing.T) { testFunderFunding(t, 2) })
 }
 
 func testFunderFunding(t *testing.T, n int) {
-	simBackend := test.NewSimulatedBackend()
 	rng := rand.New(rand.NewSource(1337))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*timeout)
+	defer cancel()
+
+	simBackend := test.NewSimulatedBackend()
 	ks := ethwallettest.GetKeystore()
 	deployAccount := wallettest.NewRandomAccount(rng).(*wallet.Account).Account
-	simBackend.FundAddress(context.Background(), deployAccount.Address)
+	simBackend.FundAddress(ctx, deployAccount.Address)
 	contractBackend := NewContractBackend(simBackend, ks, deployAccount)
 	// Deploy Assetholder
-	assetETH, err := DeployETHAssetholder(context.Background(), contractBackend, deployAccount.Address)
-	if err != nil {
-		panic(err)
-	}
+	assetETH, err := DeployETHAssetholder(ctx, contractBackend, deployAccount.Address)
+	require.NoError(t, err)
 	t.Log(assetETH.String())
+
 	parts := make([]perunwallet.Address, n)
 	funders := make([]*Funder, n)
 	for i := 0; i < n; i++ {
 		acc := wallettest.NewRandomAccount(rng).(*wallet.Account)
-		simBackend.FundAddress(context.Background(), acc.Account.Address)
+		simBackend.FundAddress(ctx, acc.Account.Address)
 		parts[i] = acc.Address()
 		cb := NewContractBackend(simBackend, ks, acc.Account)
 		funders[i] = NewSimulatedFunder(cb, assetETH)
@@ -95,9 +99,6 @@ func testFunderFunding(t *testing.T, n int) {
 	app := channeltest.NewRandomApp(rng)
 	params := channel.NewParamsUnsafe(uint64(0), parts, app.Def(), big.NewInt(rng.Int63()))
 	allocation := newValidAllocation(parts, assetETH)
-	// Test with valid context
-	ctx, cancel := context.WithTimeout(context.Background(), timeout*10)
-	defer cancel()
 	for i, funder := range funders {
 		req := channel.FundingReq{
 			Params:     params,
