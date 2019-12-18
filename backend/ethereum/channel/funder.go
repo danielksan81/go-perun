@@ -109,6 +109,7 @@ func (f *Funder) fundAssets(ctx context.Context, request channel.FundingReq, con
 	// Connect to all AssetHolder contracts.
 	for assetIndex, asset := range contracts {
 		// Create a new transaction (needs to be cloned because of go-ethereum bug).
+		// See https://github.com/ethereum/go-ethereum/pull/20412
 		balance := new(big.Int).Set(request.Allocation.OfParts[request.Idx][assetIndex])
 		var auth *bind.TransactOpts
 		// If we want to fund the channel with ether, send eth in transaction.
@@ -172,6 +173,7 @@ func (f *Funder) waitForFundingConfirmations(ctx context.Context, request channe
 				for h, id := range partIDs {
 					if id == event.FundingID {
 						idx = h
+						break
 					}
 				}
 				// Retrieve the position in the asset array.
@@ -179,6 +181,7 @@ func (f *Funder) waitForFundingConfirmations(ctx context.Context, request channe
 				for h, ctr := range contracts {
 					if *ctr.Address == event.Raw.Address {
 						assetIdx = h
+						break
 					}
 				}
 				// Check if the participant sent the correct amounts of funds.
