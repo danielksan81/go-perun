@@ -34,6 +34,9 @@
 	I.e: recover() treats panic(nil) the same as no panic.
 	Or: I pressed the red button. -->
 
+**Reproduction**&emsp; <!-- Optional if obvious.
+	How can the bug be reproduced?
+	Either describe or provide a short code sample. -->
 
 **Fix**&emsp; <!-- Optional.
 	How can the bug be fixed? Just a short hint would suffice. If you have no
@@ -43,6 +46,10 @@
 		function();
 		didPanic = false; // Only executed if no panic occurred. -->
 
+**Testing**&emsp; <!--
+	Describe a test case that tests for just this bug, or, if another test case
+	already covers this, name it.
+	I.e: Create a sub test that tests panic(nil). -->
 
 <!-- End -->
 /label ~"🐛 bug"
