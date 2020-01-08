@@ -23,6 +23,9 @@ func (b *Batch) Put(key string, value string) error {
 
 // PutBytes puts a new byte slice into the batch.
 func (b *Batch) PutBytes(key string, value []byte) error {
+	if value == nil {
+		return errors.New("value must not be nil")
+	}
 	b.Batch.Put([]byte(key), []byte(value))
 	return nil
 }

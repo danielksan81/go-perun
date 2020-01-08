@@ -66,6 +66,10 @@ func (d *Database) Put(key string, value string) error {
 // PutBytes inserts the given value into the key-value store.
 // If the key is already present, it is overwritten and no error is returned.
 func (d *Database) PutBytes(key string, value []byte) error {
+	if value == nil {
+		return errors.New("value must not be nil")
+	}
+
 	err := d.DB.Put([]byte(key), value, nil)
 	return errors.Wrap(err, "Database.Put(key, value) error")
 }
