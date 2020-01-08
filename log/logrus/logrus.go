@@ -19,8 +19,11 @@ type Logger struct {
 var _ log.Logger = (*Logger)(nil)
 
 // FromLogrus creates a logger from a logrus.Logger.
-func FromLogrus(l *logrus.Logger) *Logger {
-	return &Logger{logrus.NewEntry(l)}
+func FromLogrus(l *logrus.Logger) *logger {
+	if l == nil {
+		log.Panic("logger must not be nil")
+	}
+	return &logger{logrus.NewEntry(l)}
 }
 
 // WithField calls WithField on the logrus.Logger.
@@ -43,6 +46,10 @@ func (l *Logger) WithError(e error) log.Logger {
 // Set sets a logrus logger as the current framework logger with the given level
 // and formatter.
 func Set(level logrus.Level, formatter logrus.Formatter) {
+	if formatter == nil {
+		log.Panic("formatter must not be nil")
+	}
+
 	logger := logrus.New()
 	logger.SetLevel(level)
 	logger.SetFormatter(formatter)

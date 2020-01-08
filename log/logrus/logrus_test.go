@@ -61,3 +61,12 @@ func TestLogrus(t *testing.T) {
 	a.Contains(buf.String(), "Doris Day")
 	a.Contains(buf.String(), "error-message")
 }
+
+func TestFromLogrus_NilArgs(t *testing.T) {
+	a := assert.New(t)
+	a.Panics(func() { FromLogrus(nil) })
+}
+
+func TestSet_NilArgs(t *testing.T) {
+	assert.Panics(t, func() { Set(logrus.InfoLevel, nil) })
+}
