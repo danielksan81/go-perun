@@ -16,11 +16,13 @@
 package memorydb // import "perun.network/go-perun/db/memorydb"
 
 import (
-	"perun.network/go-perun/db"
-
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/pkg/errors"
+
+	"perun.network/go-perun/db"
 )
 
 // Database implements the Database interface and stores the values in memory.
@@ -91,6 +93,9 @@ func (d *Database) Put(key string, value string) error {
 
 // PutBytes saves a bytes value under a key.
 func (d *Database) PutBytes(key string, value []byte) error {
+	if value == nil {
+		return errors.New("value must not be nil")
+	}
 	return d.Put(key, string(value))
 }
 

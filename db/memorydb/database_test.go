@@ -8,6 +8,9 @@ package memorydb
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"perun.network/go-perun/db/test"
 )
 
@@ -39,4 +42,10 @@ func TestDatabase(t *testing.T) {
 	ittest.MustEnd()
 
 	return
+}
+
+func TestDatabase_PutBytes_NilArgs(t *testing.T) {
+	err := new(Database).PutBytes("key", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "value")
 }

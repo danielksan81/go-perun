@@ -8,6 +8,9 @@ package memorydb
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"perun.network/go-perun/db/test"
 )
 
@@ -16,4 +19,10 @@ func TestBatch(t *testing.T) {
 		test.GenericBatchTest(t, NewDatabase())
 	})
 	return
+}
+
+func TestBatch_PutBytes_NilArgs(t *testing.T) {
+	err := new(Batch).PutBytes("key", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "value")
 }
