@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,7 +32,7 @@ import (
 func TestSettler_CheckGasLimit(t *testing.T) {
 	numParts := 10
 	rng := rand.New(rand.NewSource(20191230))
-	settler, req, accounts := newSettlerAndRequest(t, rng, numParts, true)
+	settler, req, _, accounts := newSettlerAndRequest(t, rng, numParts, true)
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -50,13 +51,14 @@ func TestSettler_MultipleSettles(t *testing.T) {
 }
 
 func settleMultipleConcurrent(t *testing.T, numParts int, parallel bool) {
+	t.Parallel()
 	seed := time.Now().UnixNano()
 	t.Logf("seed is %v", seed)
 	if parallel {
 		seed++
 	}
 	rng := rand.New(rand.NewSource(int64(seed)))
-	settler, req, accounts := newSettlerAndRequest(t, rng, numParts, true)
+	settler, req, funder, accounts := newSettlerAndRequest(t, rng, numParts, true)
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -81,17 +83,18 @@ func settleMultipleConcurrent(t *testing.T, numParts int, parallel bool) {
 			assert.NoError(t, settler.Settle(ctx, req, accounts[i]), "Settling should succeed")
 		}
 	}
+	assertSettled(ctx, t, funder, req)
 }
 
 func TestSettler_nonfinalState(t *testing.T) {
 	rng := rand.New(rand.NewSource(1))
-	settler, req, accounts := newSettlerAndRequest(t, rng, 2, false)
+	settler, req, _, accounts := newSettlerAndRequest(t, rng, 2, false)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	assert.Panics(t, func() { settler.Settle(ctx, req, accounts[0]) }, "Uncooperative settle should panic - not implemented yet")
 }
 
-func newSettlerAndRequest(t *testing.T, rng *rand.Rand, numParts int, final bool) (*Settler, channel.SettleReq, []perunwallet.Account) {
+func newSettlerAndRequest(t *testing.T, rng *rand.Rand, numParts int, final bool) (*Settler, channel.SettleReq, *Funder, []perunwallet.Account) {
 	s := newSimulatedSettler(t)
 	f := &Funder{
 		ContractBackend: s.ContractBackend,
@@ -131,7 +134,7 @@ func newSettlerAndRequest(t *testing.T, rng *rand.Rand, numParts int, final bool
 		Idx:    uint16(0),
 		Tx:     tx,
 	}
-	return s, req, accounts
+	return s, req, f, accounts
 }
 
 func newSimulatedSettler(t *testing.T) *Settler {
@@ -172,5 +175,19 @@ func newValidState(rng *rand.Rand, params *channel.Params, assetholder common.Ad
 		Allocation: allocation,
 		Data:       channeltest.NewRandomData(rng),
 		IsFinal:    false,
+	}
+}
+
+func assertSettled(ctx context.Context, t *testing.T, funder *Funder, req channel.SettleReq) {
+	contracts, err := funder.connectToContracts(req.Tx.Assets)
+	require.NoError(t, err, "Connecting to assets should not fail")
+	for _, asset := range contracts {
+		opts := bind.CallOpts{
+			Pending: false,
+			Context: ctx,
+		}
+		b, err := asset.Settled(&opts, req.Params.ID())
+		assert.NoError(t, err, "Retrieving settled status should not fail")
+		assert.True(t, b, "Settled should be set to true")
 	}
 }
