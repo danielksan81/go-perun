@@ -34,6 +34,8 @@ func TestApp_ValidInit(t *testing.T) {
 
 	nodata := &channel.State{Data: new(NoData)}
 	assert.Nil(app.ValidInit(nil, nodata))
+
+	assert.Error(app.ValidInit(nil, nil), "channel state")
 }
 
 func TestApp_ValidTransition(t *testing.T) {
@@ -100,6 +102,13 @@ func TestApp_ValidTransition(t *testing.T) {
 		to := from.Clone()
 		to.Data = nil
 		assert.Panics(t, func() { app.ValidTransition(nil, from, to, 0) })
+	})
+
+	t.Run("nil arguments", func(t *testing.T) {
+		s := newStateWithAlloc(tests[0].from)
+		assert.Error(t, app.ValidTransition(nil, nil, s, 0), "channel state")
+		assert.Error(t, app.ValidTransition(nil, s, nil, 0), "channel state")
+		assert.Error(t, app.ValidTransition(nil, nil, nil, 0), "channel state")
 	})
 
 	// Note: we don't need to test other invalid input as the framework guarantees

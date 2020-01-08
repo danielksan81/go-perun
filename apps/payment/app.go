@@ -34,6 +34,13 @@ func (a *App) DecodeData(io.Reader) (channel.Data, error) {
 // ValidTransition checks that money flows only from the actor to the other
 // participants.
 func (a *App) ValidTransition(_ *channel.Params, from, to *channel.State, actor channel.Index) error {
+	if from == nil {
+		return errors.New("original channel state must not be nil")
+	}
+	if to == nil {
+		return errors.New("new channel state argument must not be nil")
+	}
+
 	assertNoData(to)
 
 	for i, bals := range from.OfParts {
@@ -51,6 +58,10 @@ func (a *App) ValidTransition(_ *channel.Params, from, to *channel.State, actor 
 // ValidInit panics if State.Data is not *NoData and returns nil otherwise. Any
 // valid allocation forms a valid initial state.
 func (a *App) ValidInit(_ *channel.Params, s *channel.State) error {
+	if s == nil {
+		return errors.New("channel state must not be nil")
+	}
+
 	assertNoData(s)
 	return nil
 }
