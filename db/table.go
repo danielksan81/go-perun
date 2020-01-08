@@ -5,7 +5,12 @@
 
 package db
 
-import "perun.network/go-perun/db/key"
+import (
+	"github.com/pkg/errors"
+
+	"perun.network/go-perun/db/key"
+	"perun.network/go-perun/log"
+)
 
 // Table is a wrapper around a database with a key prefix. All key access is
 // automatically prefixed. Close() is a noop and properties are forwarded
@@ -17,6 +22,10 @@ type table struct {
 
 // NewTable creates a new table.
 func NewTable(db Database, prefix string) Database {
+	if db == nil {
+		log.Panic("database must not be nil")
+	}
+
 	return &table{
 		Database: db,
 		prefix:   prefix,
@@ -49,6 +58,9 @@ func (t *table) Put(key, value string) error {
 
 // PutBytes calls db.PutBytes with the prefixed key.
 func (t *table) PutBytes(key string, value []byte) error {
+	if value == nil {
+		return errors.New("value must not be nil")
+	}
 	return t.Database.PutBytes(t.pkey(key), value)
 }
 
