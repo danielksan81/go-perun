@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"perun.network/go-perun/backend/ethereum/bindings/adjudicator"
 	"perun.network/go-perun/backend/ethereum/channel/test"
 	"perun.network/go-perun/backend/ethereum/wallet"
 	"perun.network/go-perun/channel"
@@ -84,6 +85,18 @@ func settleMultipleConcurrent(t *testing.T, numParts int, parallel bool) {
 		}
 	}
 	assertSettled(ctx, t, funder, req)
+}
+
+func TestSettler_InvalidAdjudicator(t *testing.T) {
+	rng := rand.New(rand.NewSource(14))
+	settler, req, _, accounts := newSettlerAndRequest(t, rng, 2, true)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	invalidAddr := wallettest.NewRandomAddress(rng).(*wallet.Address).Address
+	invalidInstance, err := adjudicator.NewAdjudicator(invalidAddr, settler.ContractBackend)
+	assert.NoError(t, err, "NewAdjudicator does not check if there is an actual contract there")
+	settler.adjInstance = invalidInstance
+	assert.Error(t, settler.Settle(ctx, req, accounts[0]), "Settling should fail on invalid adjudicator")
 }
 
 func TestSettler_nonfinalState(t *testing.T) {
