@@ -19,11 +19,11 @@ type Logger struct {
 var _ log.Logger = (*Logger)(nil)
 
 // FromLogrus creates a logger from a logrus.Logger.
-func FromLogrus(l *logrus.Logger) *logger {
+func FromLogrus(l *logrus.Logger) *Logger {
 	if l == nil {
 		log.Panic("logger must not be nil")
 	}
-	return &logger{logrus.NewEntry(l)}
+	return &Logger{logrus.NewEntry(l)}
 }
 
 // WithField calls WithField on the logrus.Logger.

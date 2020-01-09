@@ -20,4 +20,5 @@ func TestSet(t *testing.T) {
 	// We cannot test here, that it is set to non nil, since it is not part of this package.
 	// We should kick out Collection.
 	assert.Panics(t, func() { Set(nilBackend) }, "setting a backend twice should panic")
+	assert.Panics(t, func() { Set(nilBackend) }, "setting a backend twice should panic")
 }

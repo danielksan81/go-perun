@@ -52,10 +52,12 @@ func NewSimulatedBackend() *SimulatedBackend {
 }
 
 // BlockByNumber queries a block by its number.
-func (s *SimulatedBackend) BlockByNumber(_ context.Context, number *big.Int) (*types.Block, error) {
-	if number == nil {
+func (s *SimulatedBackend) BlockByNumber(
+	_ context.Context, maybeNumber *big.Int) (*types.Block, error) {
+	if maybeNumber == nil {
 		return s.Blockchain().CurrentBlock(), nil
 	}
+	number := maybeNumber // we checked for nil
 	block := s.Blockchain().GetBlockByNumber(number.Uint64())
 	if block == nil {
 		return nil, errors.New("got nil block from blockchain")

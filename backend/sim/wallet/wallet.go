@@ -77,13 +77,14 @@ func (w *Wallet) Accounts() []wallet.Account {
 }
 
 // Contains checks whether this wallet holds this account.
-func (w *Wallet) Contains(a wallet.Account) bool {
+func (w *Wallet) Contains(maybeAccount wallet.Account) bool {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
-	if !w.connected || a == nil {
+	if !w.connected || maybeAccount == nil {
 		return false
 	}
+	a := maybeAccount // maybeAccount not nil
 
 	acc, ok := a.(*Account)
 	if !ok {
