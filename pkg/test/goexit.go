@@ -1,0 +1,36 @@
+// Copyright (c) 2019 Chair of Applied Cryptography, Technische Universität
+// Darmstadt, Germany. All rights reserved. This file is part of go-perun. Use
+// of this source code is governed by a MIT-style license that can be found in
+// the LICENSE file.
+
+package test
+
+import (
+	"sync"
+)
+
+// CheckGoexit tests whether a supplied function calls runtime.Goexit during its
+// execution.
+// Returns whether the supplied function did call runtime.Goexit.
+func CheckGoexit(function func()) bool {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	goexit := true
+	go func() {
+		defer wg.Done()
+		func() {
+			defer func() { recover() }()
+			// Call the function to be checked.
+			function()
+			// This is only executed if there was no panic and no goexit.
+			goexit = false
+		}()
+
+		// This is only executed if there was a panic, but no goexit.
+		goexit = false
+	}()
+
+	wg.Wait()
+	return goexit
+}
